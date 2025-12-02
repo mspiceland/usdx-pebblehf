@@ -2140,13 +2140,64 @@ volatile uint32_t cw_offset;
 volatile uint8_t cw_tone = 1;
 const uint32_t tones[] = { F_MCU * 700ULL / 20000000, F_MCU * 600ULL / 20000000, F_MCU * 700ULL / 20000000};
 
-volatile int8_t p_sin = 0;     // initialized with A*sin(0) = 0
-volatile int8_t n_cos = 448/4; // initialized with A*cos(t) = A
-inline void process_minsky() // Minsky circle sample [source: https://www.cl.cam.ac.uk/~am21/hakmemc.html, ITEM 149]: p_sin+=n_cos*2*PI*f/fs; n_cos-=p_sin*2*PI*f/fs;
+// Sine lookup table for CW sidetone generation (256 entries, 8-bit signed)
+// Replaces Minsky circle algorithm for cleaner audio with no accumulation errors
+const int8_t sine_table[256] PROGMEM = {
+  0, 3, 6, 9, 12, 15, 18, 21, 24, 28, 31, 34, 37, 40, 43, 46,
+  49, 51, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88,
+  90, 92, 94, 96, 98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116,
+  117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127,
+  127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118,
+  117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100, 98, 96, 94, 92,
+  90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 51,
+  49, 46, 43, 40, 37, 34, 31, 28, 24, 21, 18, 15, 12, 9, 6, 3,
+  0, -3, -6, -9, -12, -15, -18, -21, -24, -28, -31, -34, -37, -40, -43, -46,
+  -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88,
+  -90, -92, -94, -96, -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116,
+  -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127,
+  -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122, -122, -121, -120, -118,
+  -117, -116, -115, -113, -112, -111, -109, -107, -106, -104, -102, -100, -98, -96, -94, -92,
+  -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51,
+  -49, -46, -43, -40, -37, -34, -31, -28, -24, -21, -18, -15, -12, -9, -6, -3
+};
+
+// Volume control lookup table for smooth ~2dB steps (replaces bit-shift method)
+// Values scaled for 8-bit multiplication: output = (signal * volume_table[volume]) >> 8
+const uint8_t volume_table[18] PROGMEM = {
+  0,    // -1: Mute (also triggers powerDown)
+  1,    // 0:  -48 dB
+  2,    // 1:  -42 dB
+  3,    // 2:  -38 dB
+  4,    // 3:  -36 dB
+  6,    // 4:  -32 dB
+  8,    // 5:  -30 dB
+  11,   // 6:  -27 dB
+  16,   // 7:  -24 dB
+  22,   // 8:  -21 dB
+  32,   // 9:  -18 dB
+  45,   // 10: -15 dB
+  64,   // 11: -12 dB
+  90,   // 12: -9 dB (default)
+  128,  // 13: -6 dB
+  181,  // 14: -3 dB
+  255,  // 15: 0 dB
+  255   // 16: 0 dB (max, same as 15)
+};
+
+// Phase accumulator for sine wave generation
+volatile uint16_t cw_phase = 0;
+
+inline int8_t generate_sidetone()
 {
-  int8_t alpha127 = tones[cw_tone]/*cw_offset*/ * 798 / _F_SAMP_TX;  // alpha = f_tone * 2 * pi / fs
-  p_sin += alpha127 * n_cos / 127;
-  n_cos -= alpha127 * p_sin / 127;
+  // Calculate phase increment: (tone_freq * 65536) / sample_rate
+  // For 600Hz @ 4800Hz: (600 * 65536) / 4800 = 8192
+  // For 700Hz @ 4800Hz: (700 * 65536) / 4800 = 9557
+  uint16_t phase_increment = ((uint32_t)tones[cw_tone] * 65536UL) / _F_SAMP_TX;
+  
+  cw_phase += phase_increment;
+  
+  // Use upper 8 bits as index into sine table
+  return pgm_read_byte(&sine_table[cw_phase >> 8]);
 }
 
 // CW Key-click shaping, ramping up/down amplitude with sample-interval of 60us. Tnx: Yves HB9EWY https://groups.io/g/ucx/message/5107
@@ -2168,8 +2219,17 @@ void dsp_tx_cw()
 #endif // KEY_CLICK
   OCR1BL = lut[255];
   
-  process_minsky();
-  OCR1AL = (p_sin >> (16 - volume)) + 128;
+  // Generate clean sine wave using lookup table
+  int8_t sine_val = generate_sidetone();
+  
+  // Apply volume control using multiplication (preserves resolution)
+  // Handle volume range: -1 to 16, with bounds checking
+  uint8_t vol_idx = (volume < -1) ? 0 : ((volume > 16) ? 17 : (volume + 1));
+  uint8_t vol_scale = pgm_read_byte(&volume_table[vol_idx]);
+  
+  // Scale amplitude: (sine * volume) / 256, then offset to 0-255 range
+  int16_t scaled = ((int16_t)sine_val * vol_scale) >> 8;
+  OCR1AL = scaled + 128;
 }
 
 void dsp_tx_am()
