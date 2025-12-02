@@ -2875,22 +2875,26 @@ inline int16_t slow_dsp(int16_t ac)
 #ifdef FAST_AGC
   if(agc == 2) {
     ac = process_agc(ac);
-    ac = ac >> (16-volume);
   } else if(agc == 1){
     ac = process_agc_fast(ac);
-    ac = ac >> (16-volume);
+  }
 #else
   if(agc == 1){
     ac = process_agc_fast(ac);
-    ac = ac >> (16-volume);
-#endif //!FAST_AGC
-  } else {
-    //ac = ac >> (16-volume);
-    if(volume <= 13)    // if no AGC allow volume control to boost weak signals
-      ac = ac >> (13-volume);
-    else
-      ac = ac << (volume-13);
   }
+#endif //!FAST_AGC
+
+  // Apply volume control using the same lookup table as CW sidetone
+  // Volume range is -1..16, map to 0..17 index
+  {
+    uint8_t vol_idx = (volume < -1) ? 0 : ((volume > 16) ? 17 : (volume + 1));
+    uint8_t vol_scale = pgm_read_byte(&volume_table[vol_idx]);
+
+    // Scale RX audio: (ac * vol_scale) / 256, preserving sign
+    int32_t tmp = (int32_t)ac * (int32_t)vol_scale;
+    ac = (int16_t)(tmp >> 8);
+  }
+
   if(nr) ac = process_nr(ac);
 
 //  if(filt) ac = filt_var(ac) << 2;
