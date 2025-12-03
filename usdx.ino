@@ -4116,7 +4116,7 @@ void show_banner(){
   const char* cap_label[] = { "SSB", "DSP", "SDR" };
   if(ssb_cap || dsp_cap){ lcd.print('-'); lcd.print(cap_label[dsp_cap]); }
 #else
-  lcd.print(F("uSDX"));
+  lcd.print(F("PCKT20"));  // Pocket 20m single-band variant
 #endif //QCX
   lcd.print('\x01'); lcd_blanks(); lcd_blanks();
 }
