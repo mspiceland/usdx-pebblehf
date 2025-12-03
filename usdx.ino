@@ -4013,8 +4013,8 @@ void calibrate_iq()
 #endif
 #endif //QCX
 
-uint8_t prev_bandval = 3;
-uint8_t bandval = 3;
+uint8_t prev_bandval = 5;  // 5 = 20m band (single-band board)
+uint8_t bandval = 5;       // 5 = 20m band (single-band board)
 #define N_BANDS 11
 
 #ifdef CW_FREQS_QRP
@@ -4329,7 +4329,7 @@ int8_t paramAction(uint8_t action, uint8_t id = ALL)  // list of parameters
     case VOLUME:  paramAction(action, volume, 0x11, F("Volume"), NULL, -1, 16, false); break;
     case MODE:    paramAction(action, mode, 0x12, F("Mode"), mode_label, 0, _N(mode_label) - 1, false); break;
     case FILTER:  paramAction(action, filt, 0x13, F("Filter BW"), filt_label, 0, _N(filt_label) - 1, false); break;
-    case BAND:    paramAction(action, bandval, 0x14, F("Band"), band_label, 0, _N(band_label) - 1, false); break;
+    //case BAND:    paramAction(action, bandval, 0x14, F("Band"), band_label, 0, _N(band_label) - 1, false); break;  // Disabled for single-band 20m board
     case STEP:    paramAction(action, stepsize, 0x15, F("Tune Rate"), stepsize_label, 0, _N(stepsize_label) - 1, false); break;
     case VFOSEL:  paramAction(action, vfosel, 0x16, F("VFO Mode"), vfosel_label, 0, _N(vfosel_label) - 1, false); break;
 #ifdef RIT_ENABLE
@@ -5170,10 +5170,17 @@ void setup()
   } else {
     paramAction(LOAD);  // load all parameters
   }
+  
+  // Force 20m band for single-band board (override any EEPROM values)
+  bandval = 5;
+  prev_bandval = 5;
+  vfo[0] = band[5];  // Force VFOA to 20m
+  vfo[1] = band[5];  // Force VFOB to 20m
+  
   //if(abs((int32_t)F_XTAL - (int32_t)si5351.fxtal) > 50000){ si5351.fxtal = F_XTAL; }  // if F_XTAL frequency deviates too much with actual setting -> use default
   si5351.iqmsa = 0;  // enforce PLL reset
   change = true;
-  prev_bandval = bandval;
+  //prev_bandval = bandval;  // Already set above for single-band
   vox = false;  // disable VOX
   nr = 0; // disable NR
   rit = false;  // disable RIT
@@ -5535,12 +5542,11 @@ void loop()
         }
         break;
       case BE|DC:
-        //delay(100);
-        bandval++;
-        //if(bandval >= N_BANDS) bandval = 0;
-        if(bandval >= (N_BANDS-1)) bandval = 1;  // excludes 6m, 160m
-        stepsize = STEP_1k;
-        change = true;
+        // Band switching disabled for single-band 20m board
+        //bandval++;
+        //if(bandval >= (N_BANDS-1)) bandval = 1;  // excludes 6m, 160m
+        //stepsize = STEP_1k;
+        //change = true;
         break;
       case BE|PL: stepsize_change(-1); break;
       case BE|PT:
