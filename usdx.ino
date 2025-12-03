@@ -10,10 +10,10 @@
 #define DIAG             1   // Hardware diagnostics on startup (only disable when your rig is working)
 #define KEYER            1   // CW keyer
 //#define CAT              1   // CAT-interface
-#define F_XTAL    27005000   // 27MHz SI5351 crystal
+#define F_XTAL    27000350   // 27MHz SI5351 crystal
 //#define F_XTAL  25004000   // 25MHz SI5351 crystal  (enable for WB2CBA-uSDX, SI5351 break-out board or uSDXDuO)
 //#define F_XTAL  25000000   // 25MHz SI5351 crystal  (enable for 25MHz TCXO)
-//#define SWAP_ROTARY    1   // Swap rotary direction (enable for WB2CBA-uSDX)
+#define SWAP_ROTARY    1   // Swap rotary direction (enable for WB2CBA-uSDX)
 //#define QCX            1   // Supports older (non-SDR) QCX HW modifications (QCX, QCX-SSB, QCX-DSP with I/Q alignment-feature)
 //#define OLED_SSD1306   1   // OLED display (SSD1306 128x32 or 128x64), connect SDA (PD2), SCL (PD3)
 //#define OLED_SH1106    1   // OLED display (SH1106 1.3" inch display), connect SDA (PD2), SCL (PD3), NOTE that this display is pretty slow
