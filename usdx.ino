@@ -3720,7 +3720,9 @@ uint16_t analogSampleMic()
   noInterrupts();
   ADCSRA = (1 << ADEN) | (((uint8_t)log2((uint8_t)(F_CPU / 13 / (192307/1)))) & 0x07);  // hack: faster conversion rate necessary for VOX
 
-  if((dsp_cap == SDR) && (vox_thresh >= 32)) digitalWrite(RX, LOW);  // disable RF input, only for SDR mod and with low VOX threshold
+  // Removed RX toggling during mic sampling - was causing raspy audio when vox_thresh >= 32
+  // The original code disabled RF input during mic ADC to reduce RFI, but rapid toggling corrupted RX audio
+  //if((dsp_cap == SDR) && (vox_thresh >= 32)) digitalWrite(RX, LOW);
   //si5351.SendRegister(SI_CLK_OE, TX0RX0);
   uint8_t oldmux = ADMUX;
   for(;!(ADCSRA & (1 << ADIF)););  // wait until (a potential previous) ADC conversion is completed
@@ -3728,7 +3730,7 @@ uint16_t analogSampleMic()
   ADCSRA |= (1 << ADSC);    // start next ADC conversion
   for(;!(ADCSRA & (1 << ADIF)););  // wait until ADC conversion is completed
   ADMUX = oldmux;
-  if((dsp_cap == SDR) && (vox_thresh >= 32)) digitalWrite(RX, HIGH);  // enable RF input, only for SDR mod and with low VOX threshold
+  //if((dsp_cap == SDR) && (vox_thresh >= 32)) digitalWrite(RX, HIGH);
   //si5351.SendRegister(SI_CLK_OE, TX0RX1);
   adc = ADC;
   interrupts();
