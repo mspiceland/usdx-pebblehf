@@ -2875,12 +2875,15 @@ inline int16_t slow_dsp(int16_t ac)
 #ifdef FAST_AGC
   if(agc == 2) {
     ac = process_agc(ac);
+    ac = ac >> 3;  // Attenuate AGC output to match original volume scaling (was >> (16-volume) vs >> (13-volume))
   } else if(agc == 1){
     ac = process_agc_fast(ac);
+    ac = ac >> 3;  // Attenuate AGC output to match original volume scaling
   }
 #else
   if(agc == 1){
     ac = process_agc_fast(ac);
+    ac = ac >> 3;  // Attenuate AGC output to match original volume scaling
   }
 #endif //!FAST_AGC
 
