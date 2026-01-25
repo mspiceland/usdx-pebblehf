@@ -5650,6 +5650,11 @@ void loop()
       encoder_val = 0;
     }
     if(encoder_change || (prev_menumode != menumode)) paramAction(UPDATE_MENU, (menumode) ? menu : 0);  // update param with encoder change and display
+    // Force display refresh when exiting menu, even during VOX TX (LCD is not on I2C so safe to update)
+    if((prev_menumode != 0) && (menumode == 0)){
+      display_vfo(freq);
+      stepsize_showcursor();
+    }
     prev_menumode = menumode;
     if(menumode == 2){
       if(encoder_change){
