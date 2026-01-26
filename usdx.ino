@@ -48,7 +48,7 @@
 //#define TESTBENCH      1   // Tests RX chain by injection of sine wave, measurements results are sent over serial
 //#define CW_FREQS_QRP   1   // Defaults to CW QRP   frequencies when changing bands
 //#define CW_FREQS_FISTS 1   // Defaults to CW FISTS frequencies when changing bands
-#define CW_MESSAGE       1   // Transmits pre-defined CW messages on-demand (left-click menu item 4.2)
+//#define CW_MESSAGE       1   // Transmits pre-defined CW messages on-demand (left-click menu item 4.2)
 //#define CW_MESSAGE_EXT 1   // Additional CW messages
 //#define TX_DELAY       1   // Enables a delay in the actual transmission to allow relay-switching to be completed before the power is applied (see also NTX, PTX definitions below for GPIO that can switch relay/PA)
 //#define NTX            11  // Enables LOW  on TX, used as PTT out to enable external PAs (a value of 11 means PB3 is used)
@@ -1997,9 +1997,9 @@ uint8_t lut[256];
 volatile uint8_t amp;
 #define MORE_MIC_GAIN   1       // adds more microphone gain, improving overall SSB quality (when speaking further away from microphone)
 #ifdef MORE_MIC_GAIN
-volatile uint8_t vox_thresh = (1 << 2);
+volatile uint8_t vox_thresh = 50;  // default noise gate to prevent false VOX triggers
 #else
-volatile uint8_t vox_thresh = (1 << 1); //(1 << 2);
+volatile uint8_t vox_thresh = 50;  // default noise gate to prevent false VOX triggers
 #endif
 volatile uint8_t drive = 2;   // hmm.. drive>2 impacts cpu load..why?
 
