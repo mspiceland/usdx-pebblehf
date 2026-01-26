@@ -54,7 +54,7 @@
 //#define NTX            11  // Enables LOW  on TX, used as PTT out to enable external PAs (a value of 11 means PB3 is used)
 //#define PTX            11  // Enables HIGH on TX, used as PTT out to enable external PAs (a value of 11 means PB3 is used)
 //#define CLOCK          1   // Enables clock
-#define CW_INTERMEDIATE  1   // CW decoder shows intermediate characters (only available for LCD and F_MCU at 20M), sequences like:  EIS[HV] EIUF EAW[JP] EARL TMO TMG[ZQ] TND[BX] TNK[YC], may be good to learn CW; a full list of possible sequences:  EISH5 EISV3 EIUF EIUU2 EAWJ1 EAWP EARL TMOO0 TMOO9 TMOO8 TMGZ7 TMGQ TNDB6 TNDX TNKY TNKC
+//#define CW_INTERMEDIATE  1   // CW decoder shows intermediate characters (only available for LCD and F_MCU at 20M), sequences like:  EIS[HV] EIUF EAW[JP] EARL TMO TMG[ZQ] TND[BX] TNK[YC], may be good to learn CW; a full list of possible sequences:  EISH5 EISV3 EIUF EIUU2 EAWJ1 EAWP EARL TMOO0 TMOO9 TMOO8 TMGZ7 TMGQ TNDB6 TNDX TNKY TNKC
 //#define F_XTAL  20000000   // Enable this for uSDXDuO, 20MHz SI5351 crystal
 //#define TX_CLK0_CLK1   1   // Enable this for uSDXDuO, i.e. when PA is driven by CLK0, CLK1 (not CLK2); NTX pin may be used for enabling the TX path (this is like RX pin, except that RX may also be used as attenuator)
 //#define F_CLK2  12000000   // Enables a fixed CLK2 clock output of choice (only applicable when TX_CLK0_CLK1 is enabled), e.g. for up-converter or to clock UART USB device
@@ -223,7 +223,7 @@ uint8_t _digitalRead(uint8_t pin){  // reads pin or (via CAT) artificially overr
 #define IAMBICA  0x00     // 0 for Iambic A, 1 for Iambic B
 #define SINGLE   2        // Keyer Mode 0 1 -> Iambic2  2 ->SINGLE
 
-int keyer_speed = 25;
+int keyer_speed = 15;
 static unsigned long ditTime;                    // No. milliseconds per dit
 static uint8_t keyerControl;
 static uint8_t keyerState;
@@ -2083,7 +2083,7 @@ inline int16_t ssb(int16_t in)
 #define MIC_ATTEN  0  // 0*6dB attenuation (note that the LSB bits are quite noisy)
 volatile int8_t mox = 0;
 volatile int8_t volume = 12;
-volatile int8_t sidetone_vol = 8;  // Independent CW sidetone volume (range -1 to 16)
+volatile int8_t sidetone_vol = 12;  // Independent CW sidetone volume (range -1 to 16)
 
 // This is the ADC ISR, issued with sample-rate via timer1 compb interrupt.
 // It performs in real-time the ADC sampling, calculation of SSB phase-differences, calculation of SI5351 frequency registers and send the registers to SI5351 over I2C.
@@ -3744,7 +3744,7 @@ uint16_t analogSampleMic()
 
 volatile bool change = true;
 volatile int32_t freq = 14000000;
-static int32_t vfo[] = { 7074000, 14074000 };
+static int32_t vfo[] = { 14030000, 14030000 };
 static uint8_t vfomode[] = { USB, USB };
 enum vfo_t { VFOA=0, VFOB=1, SPLIT=2 };
 volatile uint8_t vfosel = VFOA;
@@ -5183,11 +5183,12 @@ void setup()
     paramAction(LOAD);  // load all parameters
   }
   
-  // Force 20m band for single-band board (override any EEPROM values)
+  // Force 20m band for single-band board
   bandval = 5;
   prev_bandval = 5;
-  vfo[0] = band[5];  // Force VFOA to 20m
-  vfo[1] = band[5];  // Force VFOB to 20m
+  // Only override VFO frequencies if they're outside 20m band limits (preserve saved frequencies)
+  if(vfo[0] < FREQ_LIMIT_LOW || vfo[0] > FREQ_LIMIT_HIGH) vfo[0] = 14030000UL;  // Default to 14.030 MHz
+  if(vfo[1] < FREQ_LIMIT_LOW || vfo[1] > FREQ_LIMIT_HIGH) vfo[1] = 14030000UL;  // Default to 14.030 MHz
   
   //if(abs((int32_t)F_XTAL - (int32_t)si5351.fxtal) > 50000){ si5351.fxtal = F_XTAL; }  // if F_XTAL frequency deviates too much with actual setting -> use default
   si5351.iqmsa = 0;  // enforce PLL reset
