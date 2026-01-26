@@ -2083,6 +2083,7 @@ inline int16_t ssb(int16_t in)
 #define MIC_ATTEN  0  // 0*6dB attenuation (note that the LSB bits are quite noisy)
 volatile int8_t mox = 0;
 volatile int8_t volume = 12;
+volatile int8_t sidetone_vol = 8;  // Independent CW sidetone volume (range -1 to 16)
 
 // This is the ADC ISR, issued with sample-rate via timer1 compb interrupt.
 // It performs in real-time the ADC sampling, calculation of SSB phase-differences, calculation of SI5351 frequency registers and send the registers to SI5351 over I2C.
@@ -2223,9 +2224,9 @@ void dsp_tx_cw()
   // Generate clean sine wave using lookup table
   int8_t sine_val = generate_sidetone();
   
-  // Apply volume control using multiplication (preserves resolution)
+  // Apply sidetone volume control (independent from RX volume)
   // Handle volume range: -1 to 16, with bounds checking
-  uint8_t vol_idx = (volume < -1) ? 0 : ((volume > 16) ? 17 : (volume + 1));
+  uint8_t vol_idx = (sidetone_vol < -1) ? 0 : ((sidetone_vol > 16) ? 17 : (sidetone_vol + 1));
   uint8_t vol_scale = pgm_read_byte(&volume_table[vol_idx]);
   
   // Scale amplitude: (sine * volume) / 256, then offset to 0-255 range
@@ -4325,7 +4326,7 @@ const char* agc_label[] = { "OFF", "Fast", "Slow" };
 
 #define N_ALL_PARAMS (N_PARAMS+5)  // number of parameters
 
-enum params_t {_NULL, VOLUME, MODE, FILTER, BAND, STEP, VFOSEL, RIT, AGC, NR, ATT, ATT2, SMETER, SWRMETER, CWDEC, CWTONE, CWOFF, SEMIQSK, KEY_WPM, KEY_MODE, KEY_PIN, KEY_TX, VOX, VOXGAIN, DRIVE, TXDELAY, MOX, CWINTERVAL, CWMSG1, CWMSG2, CWMSG3, CWMSG4, CWMSG5, CWMSG6, PWM_MIN, PWM_MAX, SIFXTAL, IQ_ADJ, CALIB, SR, CPULOAD, PARAM_A, PARAM_B, PARAM_C, BACKL, FREQA, FREQB, MODEA, MODEB, VERS, ALL=0xff};
+enum params_t {_NULL, VOLUME, MODE, FILTER, BAND, STEP, VFOSEL, RIT, AGC, NR, ATT, ATT2, SMETER, SWRMETER, CWDEC, CWTONE, SIDETONE_VOL, CWOFF, SEMIQSK, KEY_WPM, KEY_MODE, KEY_PIN, KEY_TX, VOX, VOXGAIN, DRIVE, TXDELAY, MOX, CWINTERVAL, CWMSG1, CWMSG2, CWMSG3, CWMSG4, CWMSG5, CWMSG6, PWM_MIN, PWM_MAX, SIFXTAL, IQ_ADJ, CALIB, SR, CPULOAD, PARAM_A, PARAM_B, PARAM_C, BACKL, FREQA, FREQB, MODEA, MODEB, VERS, ALL=0xff};
 
 int8_t paramAction(uint8_t action, uint8_t id = ALL)  // list of parameters
 {
@@ -4363,8 +4364,9 @@ int8_t paramAction(uint8_t action, uint8_t id = ALL)  // list of parameters
 #ifdef FILTER_700HZ
     case CWTONE:  if(dsp_cap) paramAction(action, cw_tone, 0x22, F("CW Tone"), cw_tone_label, 0, 1, false); break;
 #endif
+    case SIDETONE_VOL: paramAction(action, sidetone_vol, 0x23, F("CW Side Vol"), NULL, -1, 16, false); break;
 #ifdef QCX
-    case CWOFF:   paramAction(action, cw_offset, 0x23, F("CW Offset"), NULL, 300, 2000, false); break;
+    case CWOFF:   paramAction(action, cw_offset, 0x29, F("CW Offset"), NULL, 300, 2000, false); break;
 #endif
 #ifdef SEMI_QSK
     case SEMIQSK: paramAction(action, semi_qsk,  0x24, F("Semi QSK"), offon_label, 0, 1, false); break;
