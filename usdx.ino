@@ -4022,6 +4022,10 @@ uint8_t prev_bandval = 5;  // 5 = 20m band (single-band board)
 uint8_t bandval = 5;       // 5 = 20m band (single-band board)
 #define N_BANDS 11
 
+// Band frequency limits for single-band board (change these for other band variants)
+#define FREQ_LIMIT_LOW   14000000UL  // 20m band lower limit (14.000 MHz)
+#define FREQ_LIMIT_HIGH  14350000UL  // 20m band upper limit (14.350 MHz)
+
 #ifdef CW_FREQS_QRP
 uint32_t band[N_BANDS] = { /*472000,*/ 1810000, 3560000, 5351500, 7030000, 10106000, 14060000, 18096000, 21060000, 24906000, 28060000, 50096000/*, 70160000, 144060000*/ };  // CW QRP freqs
 #else
@@ -4046,7 +4050,7 @@ void process_encoder_tuning_step(int8_t steps)
     rit = max(-9999, min(9999, rit));
   } else {
     freq += steps * stepval;
-    freq = max(1, min(999999999, freq));
+    freq = max(FREQ_LIMIT_LOW, min(FREQ_LIMIT_HIGH, freq));  // Limit to band edges
   }
   change = true;
 }
