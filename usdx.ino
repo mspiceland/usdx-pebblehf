@@ -2139,8 +2139,7 @@ ADCSRA |= (1 << ADSC);  // causes RFI on QCX-SSB units (not on units with direct
 
 volatile uint16_t acc;
 volatile uint32_t cw_offset;
-volatile uint8_t cw_tone = 1;
-const uint32_t tones[] = { F_MCU * 700ULL / 20000000, F_MCU * 600ULL / 20000000, F_MCU * 700ULL / 20000000};
+volatile uint16_t cw_tone = 600;  // CW sidetone frequency in Hz (user-configurable 300-900 Hz)
 
 // Sine lookup table for CW sidetone generation (256 entries, 8-bit signed)
 // Replaces Minsky circle algorithm for cleaner audio with no accumulation errors
@@ -2192,9 +2191,9 @@ volatile uint16_t cw_phase = 0;
 inline int8_t generate_sidetone()
 {
   // Calculate phase increment: (tone_freq * 65536) / sample_rate
-  // For 600Hz @ 4800Hz: (600 * 65536) / 4800 = 8192
-  // For 700Hz @ 4800Hz: (700 * 65536) / 4800 = 9557
-  uint16_t phase_increment = ((uint32_t)tones[cw_tone] * 65536UL) / _F_SAMP_TX;
+  // cw_tone is the actual frequency in Hz (300-900)
+  // Phase increment = (frequency * 65536) / sample_rate
+  uint16_t phase_increment = ((uint32_t)cw_tone * 65536UL) / _F_SAMP_TX;
   
   cw_phase += phase_increment;
   
@@ -4314,7 +4313,6 @@ const char* smode_label[] = { "OFF", "dBm", "S", "S-bar", "wpm" };
 #ifdef SWR_METER
 const char* swr_label[] = { "OFF", "FWD-SWR", "FWD-REF", "VFWD-VREF" };
 #endif
-const char* cw_tone_label[] = { "700", "600" };
 #ifdef KEYER
 const char* keyer_mode_label[] = { "Iambic A", "Iambic B","Straight" };
 #endif
@@ -4361,9 +4359,7 @@ int8_t paramAction(uint8_t action, uint8_t id = ALL)  // list of parameters
 #ifdef CW_DECODER
     case CWDEC:   paramAction(action, cwdec, 0x21, F("CW Decoder"), offon_label, 0, 1, false); break;
 #endif
-#ifdef FILTER_700HZ
-    case CWTONE:  if(dsp_cap) paramAction(action, cw_tone, 0x22, F("CW Tone"), cw_tone_label, 0, 1, false); break;
-#endif
+    case CWTONE:  paramAction(action, cw_tone, 0x22, F("CW Tone"), NULL, 300, 900, false); break;
     case SIDETONE_VOL: paramAction(action, sidetone_vol, 0x23, F("CW Side Vol"), NULL, -1, 16, false); break;
 #ifdef QCX
     case CWOFF:   paramAction(action, cw_offset, 0x29, F("CW Offset"), NULL, 300, 2000, false); break;
@@ -5165,9 +5161,9 @@ void setup()
   if(!ssb_cap){ vfomode[0] = CW; vfomode[1] = CW; filt = 4; stepsize = STEP_500; }
   if(dsp_cap != SDR) pwm_max = 255; // implies that key-shaping circuit is probably present, so use full-scale
   if(dsp_cap == DSP) volume = 10;
-  if(!dsp_cap) cw_tone = 2;   // use internal 700Hz QCX filter, so use same offset and keyer tone
+  if(!dsp_cap) cw_tone = 700;   // use internal 700Hz QCX filter, so use same offset and keyer tone
 #endif //QCX
-  cw_offset = tones[cw_tone];
+  cw_offset = cw_tone;  // CW offset in Hz, same as sidetone frequency
   //freq = bands[band];
   
   // Load parameters from EEPROM, reset to factory defaults when stored values are from a different version
@@ -5191,6 +5187,7 @@ void setup()
   if(vfo[1] < FREQ_LIMIT_LOW || vfo[1] > FREQ_LIMIT_HIGH) vfo[1] = 14030000UL;  // Default to 14.030 MHz
   
   //if(abs((int32_t)F_XTAL - (int32_t)si5351.fxtal) > 50000){ si5351.fxtal = F_XTAL; }  // if F_XTAL frequency deviates too much with actual setting -> use default
+  cw_offset = cw_tone;  // recalculate cw_offset from loaded cw_tone
   si5351.iqmsa = 0;  // enforce PLL reset
   change = true;
   //prev_bandval = bandval;  // Already set above for single-band
@@ -5720,7 +5717,8 @@ void loop()
         }
 #endif
         if(menu == CWTONE){
-          if(dsp_cap){ cw_offset = (cw_tone == 0) ? tones[0] : tones[1]; paramAction(SAVE, CWOFF); }
+          cw_offset = cw_tone; paramAction(SAVE, CWOFF);  // CW offset in Hz, same as sidetone frequency
+          change = true;  // recalculate RX frequency with new offset
         }
         if(menu == IQ_ADJ){
           change = true;
