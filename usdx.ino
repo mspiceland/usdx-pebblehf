@@ -4322,11 +4322,11 @@ const char* agc_label[] = { "OFF", "Fast", "Slow" };
 
 #define _N(a) sizeof(a)/sizeof(a[0])
 
-#define N_PARAMS 46  // number of (visible) parameters (includes BACKL which was unreachable in original upstream)
+#define N_PARAMS 45  // number of (visible) parameters
 
 #define N_ALL_PARAMS (N_PARAMS+5)  // number of parameters
 
-enum params_t {_NULL, VOLUME, MODE, FILTER, BAND, STEP, VFOSEL, RIT, AGC, NR, ATT, ATT2, SMETER, SWRMETER, CWDEC, CWTONE, SIDETONE_VOL, CWOFF, SEMIQSK, KEY_WPM, KEY_MODE, KEY_PIN, KEY_TX, VOX, VOXGAIN, DRIVE, TXDELAY, MOX, CWINTERVAL, CWMSG1, CWMSG2, CWMSG3, CWMSG4, CWMSG5, CWMSG6, PWM_MIN, PWM_MAX, SIFXTAL, IQ_ADJ, CALIB, SR, CPULOAD, PARAM_A, PARAM_B, PARAM_C, BACKL, SWVER, FREQA, FREQB, MODEA, MODEB, VERS, ALL=0xff};
+enum params_t {_NULL, VOLUME, MODE, FILTER, BAND, STEP, VFOSEL, RIT, AGC, NR, ATT, ATT2, SMETER, SWRMETER, CWDEC, CWTONE, SIDETONE_VOL, CWOFF, SEMIQSK, KEY_WPM, KEY_MODE, KEY_PIN, KEY_TX, VOX, VOXGAIN, DRIVE, TXDELAY, MOX, CWINTERVAL, CWMSG1, CWMSG2, CWMSG3, CWMSG4, CWMSG5, CWMSG6, PWM_MIN, PWM_MAX, SIFXTAL, IQ_ADJ, CALIB, SR, CPULOAD, PARAM_A, PARAM_B, PARAM_C, SWVER, BACKL, FREQA, FREQB, MODEA, MODEB, VERS, ALL=0xff};
 
 int8_t paramAction(uint8_t action, uint8_t id = ALL)  // list of parameters
 {
@@ -4413,12 +4413,12 @@ int8_t paramAction(uint8_t action, uint8_t id = ALL)  // list of parameters
     case PARAM_B: paramAction(action, param_b, 0x94, F("Param B"), NULL, INT16_MIN, INT16_MAX, false); break;
     case PARAM_C: paramAction(action, param_c, 0x95, F("Param C"), NULL, INT16_MIN, INT16_MAX, false); break;
 #endif
-    case BACKL:   paramAction(action, backlight, 0xA1, F("Backlight"), offon_label, 0, 1, false); break;   // workaround for varying N_PARAM and not being able to overflowing default cases properly
-    case SWVER:   if(action == UPDATE_MENU){ lcd.setCursor(0, 0); lcd.print(F("10.2 Version")); lcd_blanks();
+    case SWVER:   if(action == UPDATE_MENU){ lcd.setCursor(0, 0); lcd.print(F("10.1 Version")); lcd_blanks();
                   lcd.setCursor(0, 1); lcd.print(F("v")); lcd.print(F(VERSION)); lcd.print(F(" "));
                   // Print date as "Mmm DD YY" (e.g., "Feb 15 26") - __DATE__ is "Mmm DD YYYY"
                   const char* date = __DATE__; for(uint8_t i=0; i<7; i++) lcd.print(date[i]); lcd.print(date[9]); lcd.print(date[10]); lcd_blanks(); } break;
     // Invisible parameters
+    case BACKL:   paramAction(action, backlight, 0, NULL, NULL, 0, 0, false); break;  // Backlight not controllable on this hardware, keep for EEPROM compatibility
     case FREQA:   paramAction(action, vfo[VFOA], 0, NULL, NULL, 0, 0, false); break;
     case FREQB:   paramAction(action, vfo[VFOB], 0, NULL, NULL, 0, 0, false); break;
     case MODEA:   paramAction(action, vfomode[VFOA], 0, NULL, NULL, 0, 0, false); break;
