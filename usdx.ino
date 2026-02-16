@@ -2526,9 +2526,9 @@ void dec2()
 #define F_ADC_CONV (192307/2)  //was 192307/1, but as noted this produces clicks in audio stream. Slower ADC clock cures this (but is a problem for VOX when sampling mic-input simulatanously).
 
 #ifdef FAST_AGC
-volatile uint8_t agc = 2;
+volatile uint8_t agc = 0;
 #else
-volatile uint8_t agc = 1;
+volatile uint8_t agc = 0;
 #endif
 volatile uint8_t nr = 0;
 volatile uint8_t att = 0;
