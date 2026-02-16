@@ -44,6 +44,7 @@
 //#define VSS_METER      1   // Supports Vss measurement (as s-meter option), requires resistor of 1M between 12V and pin 26 (PC3)
 //#define SWR_METER      1   // Supports SWR meter with bridge on A6/A7 (LQPF ATMEGA328P) by Alain, K1FM, see: https://groups.io/g/ucx/message/6262 and https://groups.io/g/ucx/message/6361
 //#define ONEBUTTON      1   // Use single (encoder) button to control full the rig; optionally use L/R buttons to completely replace rotory encoder function
+//#define MODE_BUTTON_CHANGE 1   // Enable single-click on right button to cycle through modes (LSB/USB/CW)
 //#define DEBUG          1   // for development purposes only (adds debugging features such as CPU, sample-rate measurement, additional parameters)
 //#define TESTBENCH      1   // Tests RX chain by injection of sine wave, measurements results are sent over serial
 //#define CW_FREQS_QRP   1   // Defaults to CW QRP   frequencies when changing bands
@@ -5439,6 +5440,7 @@ void loop()
       case BL|DC:
         break;
       case BR|SC:
+#ifdef MODE_BUTTON_CHANGE
         if(!menumode){
           int8_t prev_mode = mode;
           if(rit){ rit = 0; stepsize = prev_stepsize[mode == CW]; change = true;  break; }
@@ -5468,9 +5470,17 @@ void loop()
 #endif
           change = true;
         } else {
-          if(menumode == 1){ menumode = 0; }  // short right-click while in menu: enter value selection screen
+          if(menumode == 1){ menumode = 0; }  // short right-click while in menu: exit menu
           if(menumode >= 2){ menumode = 1; change = true; paramAction(SAVE, menu); } // short right-click while in value selection screen: save, and return to menu screen
         }
+#else
+        // Single click on right button: only handle menu navigation, no mode change
+        if(menumode){
+          if(menumode == 1){ menumode = 0; }  // short right-click while in menu: exit menu
+          if(menumode >= 2){ menumode = 1; change = true; paramAction(SAVE, menu); } // short right-click while in value selection screen: save, and return to menu screen
+        }
+        // When not in menu mode, single click does nothing (mode change disabled)
+#endif //MODE_BUTTON_CHANGE
         break;
       case BR|DC:
         filt++;
