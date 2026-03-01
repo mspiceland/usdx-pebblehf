@@ -125,11 +125,14 @@ There is a menu available that can be accessed by a short left press. With the e
 
 For receive, by default an AGC is disabled but can be enabled in the menu. This increases the volume when there are weak signals and decreases for strong signals. This is good for SSB signals but can be annoying for CW operation. The AGC can be turned off in the menu, this makes the receiver less noisy but require more manual volume change. To further reduce the noise, a noise-reduction function can be enabled in the menu with the NR parameter. To use the available dynamic range optimally, you can attenuate incoming signal by enabling a front-end attenuator with "ATT" parameter. Especially on frequencies 3.5-7 MHz the atmospheric noise levels are much higher, so you can increase the receiver performance by adding attenuation (e.g 13dB) such that the noise-floor is still audible. 
 
+Pebble HF has a built in straight key and microphone.  An external key or mic can be connected to the key/mic jack.  When nothing is connected, the built in mic is enabled.  Plugging something into the jack will disable the built in mic.  IT IS IMPORTANT TO ALWAYS HAVE SOMETHING PLUGGED INTO THE JACK IF IAMBIC A/B IS SELECTED IN THE MENU.  If you select Iambic A/B mode without something plugged in, the onboard mic can falsely trigger the keyer and transmit.
+
 For SSB voice operation, connect a microphone to the paddle jack, a PTT or onboard "key" press will bring the transceiver into transmit. With the "TX Drive" parameter, it is possible to set the modulation depth or PA drive. Setting menu item "VOX" to ON enters the transceiver in Voice-On-Xmit operation (TX mode as soon as audio is detected), the VOX sensitivity can be configured with the "Noise Gate" parameter.
 
 For FT8 (and any other digital) operation, tune to the FT8 frequency (14.074 MHz), connect the headphone jack to sound card microphone jack, sound card speaker jack to microphone jack, and enable VOX mode in the menu. Adjust the volume to a minimum and start your favorite FT8 application (JTDX, WSJT-X, etc.). The sensitivity of the VOX can be set in the "Noise Gate" parameter. 
 
 On startup, the transceiver is performing a self-test (when DIAG option is enabled). It is checking the supply and bias voltages, I2C communications and algorithmic performance. In case of deviations, the display will report an error during startup. It also discovers the capabilties of the transceiver depending on the mods made.
+
 
 
 ## Credits
