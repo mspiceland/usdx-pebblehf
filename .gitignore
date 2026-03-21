@@ -1,0 +1,6 @@
+build/
+*.hex
+*.bak
+*.backup
+.DS_Store
+
