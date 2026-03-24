@@ -4,7 +4,7 @@
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define VERSION   "1.0.1"
+#define VERSION   "1.0.2"
 #define VERSION_DATE __DATE__  // Compile date for version display
 #define EEPROM_VERSION_ID 1  // Increment when EEPROM layout changes (decoupled from VERSION string)
 
@@ -1181,9 +1181,10 @@ void encoder_setup()
 {
   pinMode(ROT_A, INPUT_PULLUP);
   pinMode(ROT_B, INPUT_PULLUP);
+  last_state = (_digitalRead(ROT_B) << 1) | _digitalRead(ROT_A);  // init BEFORE enabling interrupt
+  encoder_val = 0;  // clear any spurious encoder values from power-up
   PCMSK2 |= (1 << PCINT22) | (1 << PCINT23); // interrupt-enable for ROT_A, ROT_B pin changes; see https://github.com/EnviroDIY/Arduino-SDI-12/wiki/2b.-Overview-of-Interrupts
   PCICR |= (1 << PCIE2); 
-  last_state = (_digitalRead(ROT_B) << 1) | _digitalRead(ROT_A);
   interrupts();
 }
 /*
@@ -4284,6 +4285,7 @@ void paramAction(uint8_t action, char* value, uint8_t menuid, const __FlashStrin
 #endif //MENU_STR
 
 static uint32_t save_event_time = 0;
+static uint8_t startup_flag = 1;  // skip first vfo save after boot
 static uint8_t vox_tx = 0;
 static uint8_t vox_sample = 0;
 static uint16_t vox_adc = 0;
@@ -5203,6 +5205,7 @@ void setup()
   rit = false;  // disable RIT
   freq = vfo[vfosel%2];
   mode = vfomode[vfosel%2];
+  save_event_time = 0;  // prevent save during startup - freq already loaded from EEPROM
 
 #ifdef TX_ENABLE
   build_lut();
@@ -5232,6 +5235,8 @@ void setup()
 #endif //KEYER
 
   for(; !_digitalRead(DIT) || ((mode == CW && keyer_mode != SINGLE) && (!_digitalRead(DAH)));){ fatal(F("Check PTT/key")); }// wait until DIH/DAH/PTT is released to prevent TX on startup
+  
+  encoder_val = 0;  // clear any encoder values accumulated during startup before entering main loop
 }
 
 static int32_t _step = 0;
@@ -5792,8 +5797,13 @@ void loop()
   if((change) && (!tx) && (!vox_tx)){  // only change if TX is OFF, prevent simultaneous I2C bus access
     change = false;
     if(prev_bandval != bandval){ freq = band[bandval]; prev_bandval = bandval; }
-    vfo[vfosel%2] = freq;
-    save_event_time = millis() + 1000;  // schedule time to save freq (no save while tuning, hence no EEPROM wear out)
+    if(startup_flag){  // skip vfo update on first iteration - freq already loaded from EEPROM
+      startup_flag = 0;
+      freq = vfo[vfosel%2];  // restore freq from vfo in case encoder modified it during startup
+    } else {
+      vfo[vfosel%2] = freq;
+      save_event_time = millis() + 1000;  // schedule time to save freq (no save while tuning, hence no EEPROM wear out)
+    }
  
     if(menumode == 0){
       display_vfo(freq);
