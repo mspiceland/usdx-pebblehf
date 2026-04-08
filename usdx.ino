@@ -4,7 +4,7 @@
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define VERSION   "1.0.2"
+#define VERSION   "1.0.3"
 #define VERSION_DATE __DATE__  // Compile date for version display
 #define EEPROM_VERSION_ID 1  // Increment when EEPROM layout changes (decoupled from VERSION string)
 
@@ -3922,7 +3922,7 @@ void switch_rxtx(uint8_t tx_enable){
       digitalWrite(PTX, HIGH);  // TX (enable TX)
 #endif //PTX
       lcd.setCursor(15, 1); lcd.print('T');
-      if(mode == CW){ si5351.freq_calc_fast(-cw_offset); si5351.SendPLLRegisterBulk(); } // for CW, TX at freq
+      if(mode == CW){ si5351.freq_calc_fast(cw_offset); si5351.SendPLLRegisterBulk(); } // for CW, TX at freq
 #ifdef RIT_ENABLE
       else if(rit){ si5351.freq_calc_fast(0); si5351.SendPLLRegisterBulk(); }
 #endif //RIT_ENABLE
@@ -5824,7 +5824,7 @@ void loop()
     bandval = (f > 32) ? 10 : (f > 26) ? 9 : (f > 22) ? 8 : (f > 20) ? 7 : (f > 16) ? 6 : (f > 12) ? 5 : (f > 8) ? 4 : (f > 6) ? 3 : (f > 4) ? 2 : (f > 2) ? 1 : 0;  prev_bandval = bandval; // align bandval with freq
 
     if(mode == CW){
-      si5351.freq(freq + cw_offset, rx_ph_q, 0/*90, 0*/);  // RX in CW-R (=LSB), correct for CW-tone offset
+      si5351.freq(freq - cw_offset, rx_ph_q, 0/*90, 0*/);  // RX in CW, offset below displayed freq
     } else
     if(mode == LSB)
       si5351.freq(freq, rx_ph_q, 0/*90, 0*/);  // RX in LSB
