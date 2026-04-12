@@ -97,6 +97,16 @@ avrdude -c usbtiny -p m328p \
   -U efuse:w:0xFD:m
 ```
 
+## Changelog
+
+| Version | Changes |
+|---------|---------|
+| **1.0.4** | Fix VOX spurious TX from sound card DC bias on Tip/DIT pin — skip hardware PTT check when VOX is enabled |
+| **1.0.3** | Fix CW sidetone offset direction — changing sidetone frequency now shifts received pitch in the same direction |
+| **1.0.2** | Add configurable CW tone menu option (300–900 Hz), encoder startup cleanup |
+| **1.0.1** | Decouple EEPROM version ID from firmware version string, menu version label update |
+| **1.0.0** | Fork from upstream uSDX 1.02x — new versioning scheme, version display with compile date |
+
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
