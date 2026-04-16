@@ -4,7 +4,7 @@
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define VERSION   "1.0.4"
+#define VERSION   "1.0.5"
 #define VERSION_DATE __DATE__  // Compile date for version display
 #define EEPROM_VERSION_ID 1  // Increment when EEPROM layout changes (decoupled from VERSION string)
 
@@ -1978,6 +1978,7 @@ const int16_t _F_SAMP_TX = (F_MCU * 4800LL / 20000000);  // Actual ADC sample-ra
 #define _UA  600 //=(_FSAMP_TX)/8 //(_F_SAMP_TX)      //360  // unit angle; integer representation of one full circle turn or 2pi radials or 360 degrees, should be a integer divider of F_SAMP_TX and maximized to have higest precision
 #define MAX_DP  ((filt == 0) ? _UA : (filt == 3) ? _UA/4 : _UA/2)     //(_UA/2) // the occupied SSB bandwidth can be further reduced by restricting the maximum phase change (set MAX_DP to _UA/2).
 #define CARRIER_COMPLETELY_OFF_ON_LOW  1    // disable oscillator on low amplitudes, to prevent potential unwanted biasing/leakage through PA circuit
+#define VOX_THRESH_VOICE  1  // noise gate for voice (non-VOX) mode; low value ensures mic audio is not suppressed during normal PTT operation
 #define MULTI_ADC  1  // multiple ADC conversions for more sensitive (+12dB) microphone input
 //#define QUAD  1       // invert TX signal for phase changes > 180
 
@@ -2049,7 +2050,7 @@ inline int16_t ssb(int16_t in)
 #endif  // MORE_MIC_GAIN
 
 #ifdef CARRIER_COMPLETELY_OFF_ON_LOW
-  _vox(_amp > vox_thresh);
+  _vox(_amp > (vox ? vox_thresh : VOX_THRESH_VOICE));
 #else
   if(vox) _vox(_amp > vox_thresh);
 #endif
