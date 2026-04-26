@@ -101,6 +101,7 @@ avrdude -c usbtiny -p m328p \
 
 | Version | Changes |
 |---------|---------|
+| **1.0.6** | Fix audible "thump" between CW dits/dahs caused by sudden RX audio onset — RX audio now fades in briefly after each CW TX→RX transition (no change to RF envelope or sidetone) |
 | **1.0.5** | Noise Gate setting now only applies in VOX mode; voice PTT uses optimal low threshold automatically |
 | **1.0.4** | Fix VOX spurious TX from sound card DC bias on Tip/DIT pin — skip hardware PTT check when VOX is enabled |
 | **1.0.3** | Fix CW sidetone offset direction — changing sidetone frequency now shifts received pitch in the same direction |

@@ -4,7 +4,7 @@
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define VERSION   "1.0.5"
+#define VERSION   "1.0.6"
 #define VERSION_DATE __DATE__  // Compile date for version display
 #define EEPROM_VERSION_ID 1  // Increment when EEPROM layout changes (decoupled from VERSION string)
 
@@ -2853,6 +2853,13 @@ static uint32_t absavg256 = 0;
 volatile uint32_t _absavg256 = 0;
 volatile int16_t i, q;
 
+// CW anti-thump: when returning from CW TX to RX, briefly fade the RX audio in from 0 to full volume.
+// Without this, the sudden onset of RX audio (with AGC gain restored and output-stage integrators
+// reset via _init) produces an audible "thump" between each dit/dah. The fade only affects RX audio
+// output; it does not alter the RF transmit envelope, sidetone generation, or the RX DSP chain itself.
+#define RX_CW_FADE_SAMPLES  128  // fade length in slow_dsp samples (~8-16ms depending on sample rate)
+volatile uint8_t rx_fade = 0;    // counts down from RX_CW_FADE_SAMPLES to 0 during fade-in
+
 inline int16_t slow_dsp(int16_t ac)
 {
   static uint8_t absavg256cnt;
@@ -2902,6 +2909,16 @@ inline int16_t slow_dsp(int16_t ac)
     // Scale RX audio: (ac * vol_scale) / 256, preserving sign
     int32_t tmp = (int32_t)ac * (int32_t)vol_scale;
     ac = (int16_t)(tmp >> 8);
+  }
+
+  // CW anti-thump: linearly fade RX audio in after returning from CW TX.
+  // rx_fade is set to RX_CW_FADE_SAMPLES in switch_rxtx() when transitioning back to RX in CW mode.
+  // This smooths the sudden onset of RX audio that would otherwise produce an audible thump between dits/dahs.
+  if(rx_fade){
+    // fade factor goes from 0 (silent) to ~255 (full) as rx_fade counts down from RX_CW_FADE_SAMPLES to 1
+    uint8_t fade = (uint8_t)(((uint16_t)(RX_CW_FADE_SAMPLES - rx_fade) * 255) / RX_CW_FADE_SAMPLES);
+    ac = (int16_t)(((int32_t)ac * fade) >> 8);
+    rx_fade--;
   }
 
   if(nr) ac = process_nr(ac);
@@ -3889,13 +3906,19 @@ void switch_rxtx(uint8_t tx_enable){
       semi_qsk_timeout = millis() + 8 * 8;  // no keyer? assume dit-time of 20 WPM
 #endif //KEYER
 #endif //SEMI_QSK
-      if(semi_qsk) func_ptr = dummy; else func_ptr = sdr_rx_00;
+      if(semi_qsk){
+        func_ptr = dummy;
+      } else {
+        func_ptr = sdr_rx_00;
+        rx_fade = RX_CW_FADE_SAMPLES;  // CW anti-thump: fade RX audio in
+      }
     } else {
       centiGain = _centiGain;  // restore AGC setting
 #ifdef SEMI_QSK
       semi_qsk_timeout = 0;
 #endif
       func_ptr = sdr_rx_00;
+      if(mode == CW) rx_fade = RX_CW_FADE_SAMPLES;  // CW anti-thump: fade RX audio in (semi-QSK timeout path)
     }
   }
   if((!dsp_cap) && (!tx_enable) && vox) func_ptr = dummy; //hack: for SSB mode, disable dsp_rx during vox mode enabled as it slows down the vox loop too much!
