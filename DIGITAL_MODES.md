@@ -6,22 +6,22 @@ This guide covers operating Pebble HF with FT8, FT4, JS8Call, and WSPR on the 20
 
 ## How Digital Modes Work on Pebble HF
 
-Pebble HF uses **VOX (Voice-Operated Transmit)** for PTT. When your software sends audio, the radio switches to transmit automatically — no CAT interface, no PTT cable, and no extra hardware required. This makes Pebble HF an excellent choice for portable digital operation from a phone, tablet, or laptop.
+Pebble HF uses **VOX (Voice-Operated Transmit)** for PTT. When your software sends audio, the radio switches to transmit automatically — no CAT interface and no PTT cable required. This makes Pebble HF an excellent choice for portable digital operation from a phone, tablet, or laptop.
 
-The radio's built-in USB audio codec appears on your host device as a standard **USB Audio Device**. No driver installation is required on any supported operating system (Windows, macOS, Linux, Android, iOS).
+Audio to and from Pebble HF passes through the radio's **3.5mm TRS audio jack**. You connect it to your host device via an external **USB audio dongle** (a small USB sound card), using a TRS cable between the dongle and the radio. The dongle appears on your host device as a standard **USB Audio Device**; no driver installation is required.
 
 ---
 
 ## Equipment and Connections
 
 - **Computer, phone, or tablet** — any device with a USB port
-- **USB cable** — the same cable used to power the radio
-- **Android/iOS** — a USB OTG adapter is required (USB-A to USB-C, or Lightning Camera Connection Kit)
+- **USB audio dongle** — an external USB sound card (CM108-based or similar); this is the audio interface between your device and the radio
+- **TRS cable** — 3.5mm, connecting the USB audio dongle to Pebble HF's audio jack
+- **USB OTG adapter** — required on Android/iOS to connect the USB audio dongle (USB-A to USB-C, or Lightning Camera Connection Kit)
+- **USB power supply** — a separate USB cable and source (power bank, wall adapter, or computer) to power Pebble HF; audio and power are on separate connections
 - **Antenna** — a resonant 20m antenna connected to the SMA connector
 
-A separate USB power supply is **not** needed when connected to a computer — the radio is powered from the same USB connection that carries audio.
-
-> **Power note:** On USB-C (5V), Pebble HF produces approximately 1W of RF output. On a 7–14V battery, output rises to approximately 5W. For SOTA and POTA activations requiring more power, connect a separate battery to the power input and use USB for audio only.
+> **Power note:** On USB-C (5V), Pebble HF produces approximately 1W of RF output. On a 7–14V battery, output rises to approximately 5W. For SOTA and POTA activations requiring more power, connect a separate battery to the power input.
 
 ---
 
@@ -78,11 +78,11 @@ Enable automatic time synchronisation on your computer (NTP/internet time) befor
 
 WSJT-X is the standard software for FT8 and FT4.
 
-1. Connect Pebble HF to your computer via USB.
+1. Connect your USB audio dongle to your computer, then connect the dongle to Pebble HF's audio jack via a TRS cable. Power Pebble HF from a separate USB source.
 2. Open WSJT-X and go to **File → Settings**.
 3. **Audio tab:**
-   - Input: **USB Audio Device** (Pebble HF)
-   - Output: **USB Audio Device** (Pebble HF)
+   - Input: **USB Audio Device** (your audio dongle)
+   - Output: **USB Audio Device** (your audio dongle)
 4. **Radio tab:**
    - Rig: **None**
    - PTT is handled by the radio's own VOX — no PTT setting is needed here.
@@ -101,10 +101,10 @@ The waterfall should show received signals immediately. FT8 decodes appear at th
 
 JS8Call is a keyboard-to-keyboard digital mode based on FT8 with longer, conversational messages.
 
-1. Connect Pebble HF to your computer via USB.
+1. Connect your USB audio dongle to your computer, then connect the dongle to Pebble HF's audio jack via a TRS cable. Power Pebble HF from a separate USB source.
 2. Open JS8Call and go to **File → Settings → Audio**.
-   - Input: **USB Audio Device** (Pebble HF)
-   - Output: **USB Audio Device** (Pebble HF)
+   - Input: **USB Audio Device** (your audio dongle)
+   - Output: **USB Audio Device** (your audio dongle)
 3. Under **Radio**, set Rig to **None**. PTT is handled by the radio's own VOX.
 4. Set the radio VFO to **14.078 MHz** and enable VOX (menu 3.1).
 5. In JS8Call, select **Normal** speed (default) for standard operation.
@@ -117,9 +117,9 @@ JS8Call transmissions are 15 seconds per frame at Normal speed. The same VOX beh
 
 [TrailDigi](https://codeberg.org/traildigi/traildigi) is a SOTA/POTA-optimised Android FT8/FT4 app, purpose-built for portable HF operation with radios like Pebble HF.
 
-1. Connect Pebble HF to your Android phone or tablet using a USB OTG adapter.
+1. Connect your USB audio dongle to your Android phone or tablet using a USB OTG adapter, then connect the dongle to Pebble HF's audio jack via a TRS cable. Power Pebble HF from a separate source (USB power bank or battery).
 2. Open TrailDigi and go to **Settings → Audio**.
-3. Select **USB Audio Device** (Pebble HF) as both audio input and output.
+3. Select **USB Audio Device** (your audio dongle) as both audio input and output.
 4. Enable VOX on the radio (menu 3.1).
 5. Set the radio VFO to the desired frequency (14.074 MHz for FT8).
 
@@ -129,14 +129,14 @@ TrailDigi handles timing, decoding, and logging automatically. No separate PTT o
 
 ## FT8TW (Android)
 
-[FT8TW](https://github.com/N0BOT/FT8TW) is the upstream Android app from which TrailDigi is derived. Configuration is identical to TrailDigi above.
+[FT8TW](https://github.com/N0BOT/FT8TW) is the upstream Android app from which TrailDigi is derived. Connection and configuration are identical to TrailDigi above.
 
 ---
 
 ## IFTX (iOS)
 
-1. Connect Pebble HF to your iPhone or iPad using a USB Lightning/USB-C to USB-A adapter (Camera Connection Kit or equivalent).
-2. Open IFTX and select **USB Audio Device** (Pebble HF) as the audio input and output.
+1. Connect your USB audio dongle to your iPhone or iPad using a Lightning/USB-C to USB-A adapter (Camera Connection Kit or equivalent), then connect the dongle to Pebble HF's audio jack via a TRS cable. Power Pebble HF from a separate source.
+2. Open IFTX and select **USB Audio Device** (your audio dongle) as the audio input and output.
 3. Enable VOX on the radio (menu 3.1).
 4. Set the radio VFO to the desired frequency.
 
@@ -169,7 +169,7 @@ IFTX: https://apps.apple.com/us/app/iftx/id6446093115
 
 **Audio device not detected on Android:**
 - Try a different USB OTG adapter or cable — Android USB audio support varies by device.
-- Pebble HF is USB class-compliant and does not require a driver.
+- Most USB audio dongles are class-compliant and require no driver on Android, but compatibility varies; try a different dongle if yours is not detected.
 
 ---
 
