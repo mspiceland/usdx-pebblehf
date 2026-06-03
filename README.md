@@ -126,6 +126,7 @@ Run `python3 utils/flash_pebble.py --help` for options.
 
 | Version | Changes |
 |---------|---------|
+| **1.0.7** | Fix critical CW RX bug from 1.0.3 — wanted signal was placed on the rejected-image side, making strong signals weak/inaudible while a loud image appeared ~1.2 kHz above. Reverted CW RX/TX oscillator config to the proven original; configurable CW tone retained |
 | **1.0.6** | Fix audible "thump" between CW dits/dahs caused by sudden RX audio onset — RX audio now fades in briefly after each CW TX→RX transition (no change to RF envelope or sidetone) |
 | **1.0.5** | Noise Gate setting now only applies in VOX mode; voice PTT uses optimal low threshold automatically |
 | **1.0.4** | Fix VOX spurious TX from sound card DC bias on Tip/DIT pin — skip hardware PTT check when VOX is enabled |
