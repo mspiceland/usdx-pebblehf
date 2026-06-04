@@ -3,13 +3,17 @@
 Pebble HF Board Flashing Utility
 
 Flashes firmware and programs fuses for the Pebble HF (ATmega328P) radio.
-Auto-detects USB serial programmer, flashes hex file, programs and verifies fuses.
+Supports multiple programmer types via --programmer flag.
 
 Usage:
-    python3 flash_pebble.py [hex_file] [--port /dev/cu.usbserial-XXXX]
+    python3 flash_pebble.py [hex_file] [--programmer usbtiny|stk500v1] [--port /dev/cu.usbserial-XXXX]
+
+Programmer types:
+    usbtiny   — SparkFun Pocket AVR Programmer, Adafruit USBtinyISP (no serial port needed)
+    stk500v1  — Arduino as ISP, serial-based programmers (default, auto-detects serial port)
 
 If hex_file is not specified, looks for usdx.ino.hex in the project root.
-If --port is not specified, auto-detects the USB serial port.
+If --port is not specified (stk500v1 only), auto-detects the USB serial port.
 """
 
 import subprocess
@@ -22,11 +26,33 @@ import re
 import shutil
 
 
+# ── Programmer Profiles ───────────────────────────────────────────────────────
+#
+# Each profile defines how avrdude is invoked for that programmer type.
+#   uses_serial: True  → avrdude needs -P <port> and -b <baud>
+#   uses_serial: False → avrdude talks via libusb; no port/baud flags
+#
+PROGRAMMER_PROFILES = {
+    "stk500v1": {
+        "label":       "STK500v1 / Arduino-as-ISP (serial)",
+        "programmer":  "stk500v1",
+        "baud":        "19200",
+        "uses_serial": True,
+    },
+    "usbtiny": {
+        "label":       "USBtiny / SparkFun Pocket AVR Programmer",
+        "programmer":  "usbtiny",
+        "baud":        None,
+        "uses_serial": False,
+    },
+}
+
+DEFAULT_PROGRAMMER = "stk500v1"
+
+
 # ── Configuration ────────────────────────────────────────────────────────────
 
-AVRDUDE_PROGRAMMER = "stk500v1"
 AVRDUDE_PART = "m328p"
-AVRDUDE_BAUD = "19200"
 
 FUSE_LFUSE = "0xFF"
 FUSE_HFUSE = "0xD6"
@@ -130,7 +156,7 @@ def print_warn(msg):
 # ── Serial Port Detection ────────────────────────────────────────────────────
 
 def detect_serial_port():
-    """Auto-detect USB serial port for the programmer."""
+    """Auto-detect USB serial port for serial-based programmers."""
     ports = sorted(glob.glob(SERIAL_PORT_GLOB))
 
     if not ports:
@@ -163,7 +189,6 @@ def check_avrdude():
     path = shutil.which("avrdude")
     if path:
         return path
-    # Check common Homebrew / Arduino paths
     for candidate in [
         "/usr/local/bin/avrdude",
         "/opt/homebrew/bin/avrdude",
@@ -171,49 +196,52 @@ def check_avrdude():
     ]:
         matches = glob.glob(candidate)
         if matches:
-            return matches[-1]  # latest version
+            return matches[-1]
     return None
 
 
-def run_avrdude(port, extra_args, step_label, show_output=True):
+def run_avrdude(profile, port, extra_args, step_label, show_output=True):
     """
     Run an avrdude command and capture output.
     Returns (success: bool, stdout: str, stderr: str).
 
-    avrdude prints progress bars and status to stderr.
+    For serial programmers (uses_serial=True), -P and -b are included.
+    For libusb programmers like usbtiny, they are omitted entirely.
     """
     cmd = [
         "avrdude",
-        "-c", AVRDUDE_PROGRAMMER,
+        "-c", profile["programmer"],
         "-p", AVRDUDE_PART,
-        "-P", port,
-        "-b", AVRDUDE_BAUD,
-    ] + extra_args
+    ]
+
+    if profile["uses_serial"]:
+        cmd += ["-P", port, "-b", profile["baud"]]
+
+    cmd += extra_args
 
     print_info(f"Running: {' '.join(cmd)}")
     print()
 
     try:
-        # Run the process, streaming stderr in real-time (where avrdude outputs progress)
-        # stdout is captured for fuse readback values
+        # USBtiny is a low-speed USB device and flashes slowly —
+        # a full 328P can take 2-3 minutes. Serial programmers are faster
+        # but 300s gives plenty of headroom for either.
+        timeout_seconds = 300
+
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
 
-        # Read output in real-time while process runs
-        # avrdude writes progress to stderr; we'll collect both
-        stdout_data, stderr_data = process.communicate(timeout=120)
+        stdout_data, stderr_data = process.communicate(timeout=timeout_seconds)
 
         stdout_text = stdout_data.decode("utf-8", errors="replace")
         stderr_text = stderr_data.decode("utf-8", errors="replace")
 
-        # avrdude puts most output on stderr
         combined = stderr_text + stdout_text
 
         if show_output:
-            # Print the avrdude output indented
             for line in combined.strip().splitlines():
                 print(f"  {Colors.DIM}│{Colors.RESET} {line}")
             print()
@@ -234,13 +262,13 @@ def run_avrdude(port, extra_args, step_label, show_output=True):
 
 # ── Step Functions ────────────────────────────────────────────────────────────
 
-def step_flash_firmware(port, hex_file):
+def step_flash_firmware(profile, port, hex_file):
     """Flash the firmware hex file."""
     print_step(1, 4, "Flashing firmware")
     print_info(f"Hex file: {hex_file}")
 
     success, stdout, stderr = run_avrdude(
-        port,
+        profile, port,
         ["-U", f"flash:w:{hex_file}"],
         "flash firmware",
     )
@@ -251,7 +279,6 @@ def step_flash_firmware(port, hex_file):
         print_error("avrdude returned an error during flash programming")
         return False
 
-    # Verify the output contains expected markers
     if "bytes of flash verified" not in combined:
         print_error("Flash verify string not found in avrdude output")
         return False
@@ -260,7 +287,6 @@ def step_flash_firmware(port, hex_file):
         print_error("avrdude did not complete successfully")
         return False
 
-    # Extract byte counts for display
     match = re.search(r"(\d+) bytes of flash verified", combined)
     if match:
         print_success(f"Flash programmed and verified ({match.group(1)} bytes)")
@@ -270,13 +296,13 @@ def step_flash_firmware(port, hex_file):
     return True
 
 
-def step_program_fuses(port):
+def step_program_fuses(profile, port):
     """Program the fuse bytes."""
     print_step(2, 4, "Programming fuses")
     print_info(f"lfuse={FUSE_LFUSE}  hfuse={FUSE_HFUSE}  efuse={FUSE_EFUSE}")
 
     success, stdout, stderr = run_avrdude(
-        port,
+        profile, port,
         [
             "-U", f"lfuse:w:{FUSE_LFUSE}:m",
             "-U", f"hfuse:w:{FUSE_HFUSE}:m",
@@ -291,7 +317,6 @@ def step_program_fuses(port):
         print_error("avrdude returned an error during fuse programming")
         return False
 
-    # Check that all three fuses were written and verified
     fuse_checks = [
         ("lfuse", FUSE_LFUSE),
         ("hfuse", FUSE_HFUSE),
@@ -302,7 +327,6 @@ def step_program_fuses(port):
     for fuse_name, expected_val in fuse_checks:
         pattern = rf"1 byte \({expected_val}\) to {fuse_name}.*verified"
         if not re.search(pattern, combined, re.IGNORECASE):
-            # Also accept "1 byte written, 1 verified" pattern
             if f"to {fuse_name}" in combined and "verified" in combined:
                 pass  # close enough
             else:
@@ -319,13 +343,13 @@ def step_program_fuses(port):
     return all_verified
 
 
-def step_verify_fuses(port, attempt_number, total_attempts):
+def step_verify_fuses(profile, port, attempt_number, total_attempts):
     """Read back and verify all fuse bytes."""
-    step_num = 2 + attempt_number  # steps 3 and 4
+    step_num = 2 + attempt_number
     print_step(step_num, 4, f"Verifying fuses (read-back {attempt_number}/{total_attempts})")
 
     success, stdout, stderr = run_avrdude(
-        port,
+        profile, port,
         [
             "-U", "lfuse:r:-:h",
             "-U", "hfuse:r:-:h",
@@ -344,16 +368,12 @@ def step_verify_fuses(port, attempt_number, total_attempts):
         print_error("avrdude did not complete successfully")
         return False
 
-    # Parse the fuse values from stdout
-    # avrdude writes hex values to stdout in order: lfuse, hfuse, efuse
-    # Status messages ("Reading lfuse memory ...") go to stderr
     expected_fuses = [
         ("lfuse", FUSE_LFUSE.lower()),
         ("hfuse", FUSE_HFUSE.lower()),
         ("efuse", FUSE_EFUSE.lower()),
     ]
 
-    # Extract all hex values from stdout (they come out in order)
     actual_values = re.findall(r"0x[0-9a-fA-F]+", stdout.lower())
 
     all_correct = True
@@ -376,23 +396,52 @@ def step_verify_fuses(port, attempt_number, total_attempts):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    programmer_choices = list(PROGRAMMER_PROFILES.keys())
+    programmer_help = " | ".join(
+        f"{k} ({v['label']})" for k, v in PROGRAMMER_PROFILES.items()
+    )
+
     parser = argparse.ArgumentParser(
         description="Pebble HF Board Flashing Utility",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
+Programmer types:
+{"".join(f"  {k:12s} {v['label']}{chr(10)}" for k, v in PROGRAMMER_PROFILES.items())}
 Examples:
-    python3 flash_pebble.py                          # auto-detect everything
-    python3 flash_pebble.py firmware.hex              # specify hex file
-    python3 flash_pebble.py --port /dev/cu.usbserial-3120
-    python3 flash_pebble.py --fuses-only              # skip flash, only program fuses
+    python3 flash_pebble.py                                    # stk500v1, auto-detect port
+    python3 flash_pebble.py --programmer usbtiny               # SparkFun Pocket AVR Programmer
+    python3 flash_pebble.py firmware.hex --programmer usbtiny  # specify hex + usbtiny
+    python3 flash_pebble.py --port /dev/cu.usbserial-3120      # specify serial port manually
+    python3 flash_pebble.py --fuses-only                       # skip flash, program fuses only
         """,
     )
-    parser.add_argument("hex_file", nargs="?", default=None, help="Path to .hex firmware file")
-    parser.add_argument("--port", "-p", default=None, help="Serial port (auto-detected if omitted)")
-    parser.add_argument("--fuses-only", action="store_true", help="Skip flash, only program and verify fuses")
+    parser.add_argument(
+        "hex_file", nargs="?", default=None,
+        help="Path to .hex firmware file",
+    )
+    parser.add_argument(
+        "--programmer", "-c",
+        choices=programmer_choices,
+        default=DEFAULT_PROGRAMMER,
+        metavar="PROGRAMMER",
+        help=f"Programmer type: {' | '.join(programmer_choices)} (default: {DEFAULT_PROGRAMMER})",
+    )
+    parser.add_argument(
+        "--port", "-p", default=None,
+        help="Serial port — stk500v1 only, auto-detected if omitted (ignored for usbtiny)",
+    )
+    parser.add_argument(
+        "--fuses-only", action="store_true",
+        help="Skip flash, only program and verify fuses",
+    )
     args = parser.parse_args()
 
+    profile = PROGRAMMER_PROFILES[args.programmer]
+
     print_banner()
+    print_info(f"Programmer : {profile['label']}")
+    print_info(f"Part       : {AVRDUDE_PART}")
+    print()
 
     # ── Check avrdude ──
     avrdude_path = check_avrdude()
@@ -407,7 +456,6 @@ Examples:
     if not args.fuses_only:
         hex_file = args.hex_file
         if hex_file is None:
-            # Look in project root (one level up from utils/)
             script_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(script_dir)
             candidate = os.path.join(project_root, DEFAULT_HEX_FILE)
@@ -416,10 +464,10 @@ Examples:
             elif os.path.isfile(DEFAULT_HEX_FILE):
                 hex_file = DEFAULT_HEX_FILE
             else:
-                print_error(f"Hex file not found. Looked for:")
+                print_error("Hex file not found. Looked for:")
                 print_info(f"  {candidate}")
                 print_info(f"  {os.path.abspath(DEFAULT_HEX_FILE)}")
-                print_info(f"Specify path: python3 flash_pebble.py <path_to_hex>")
+                print_info("Specify path: python3 flash_pebble.py <path_to_hex>")
                 print_big_x("SETUP", "Hex file not found")
                 sys.exit(1)
 
@@ -432,20 +480,27 @@ Examples:
         file_size = os.path.getsize(hex_file)
         print_success(f"Hex file: {hex_file} ({file_size:,} bytes)")
 
-    # ── Detect serial port ──
-    port = args.port
-    if port is None:
-        print_info("Searching for USB serial port...")
-        port = detect_serial_port()
+    # ── Serial port (serial programmers only) ──
+    port = None
+    if profile["uses_serial"]:
+        port = args.port
+        if port is None:
+            print_info("Searching for USB serial port...")
+            port = detect_serial_port()
 
-    if port is None:
-        print_error("No USB serial port found matching /dev/cu.usbserial-*")
-        print_info("Is the programmer plugged in?")
-        print_info("Check with: ls /dev/cu.*")
-        print_big_x("SETUP", "No serial port detected")
-        sys.exit(1)
+        if port is None:
+            print_error("No USB serial port found matching /dev/cu.usbserial-*")
+            print_info("Is the programmer plugged in?")
+            print_info("Check with: ls /dev/cu.*")
+            print_big_x("SETUP", "No serial port detected")
+            sys.exit(1)
 
-    print_success(f"Serial port: {port}")
+        print_success(f"Serial port: {port}")
+    else:
+        # USBtiny / libusb — no port needed
+        if args.port:
+            print_warn("--port is ignored for usbtiny (uses libusb, not a serial port)")
+        print_info("Port: (none — usbtiny uses libusb directly)")
 
     # ── Confirm before flashing ──
     print(f"\n{Colors.YELLOW}{Colors.BOLD}  Ready to flash. Press ENTER to begin (Ctrl+C to abort)...{Colors.RESET}", end="")
@@ -460,23 +515,23 @@ Examples:
 
     # ── Step 1: Flash firmware ──
     if not args.fuses_only:
-        if not step_flash_firmware(port, hex_file):
+        if not step_flash_firmware(profile, port, hex_file):
             failed_step = "FLASH FIRMWARE"
     else:
         print(f"\n  {Colors.DIM}Skipping flash (--fuses-only){Colors.RESET}")
 
     # ── Step 2: Program fuses ──
     if not failed_step:
-        if not step_program_fuses(port):
+        if not step_program_fuses(profile, port):
             failed_step = "PROGRAM FUSES"
 
     # ── Steps 3-4: Verify fuses (twice) ──
     if not failed_step:
-        if not step_verify_fuses(port, 1, 2):
+        if not step_verify_fuses(profile, port, 1, 2):
             failed_step = "VERIFY FUSES (read 1)"
 
     if not failed_step:
-        if not step_verify_fuses(port, 2, 2):
+        if not step_verify_fuses(profile, port, 2, 2):
             failed_step = "VERIFY FUSES (read 2)"
 
     # ── Final result ──
