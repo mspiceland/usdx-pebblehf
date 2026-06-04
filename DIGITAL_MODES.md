@@ -49,6 +49,20 @@ Before launching your digital mode software, configure the radio as follows:
 
 **AGC and NR** should both be off — digital mode decoders work best on the unprocessed received audio.
 
+### Audio level calibration
+
+Follow this sequence each time you set up — correct audio levels are the most common source of VOX problems:
+
+1. Set your OS audio output volume for the USB device to **100%** — let the software control the level, not the OS mixer.
+2. In WSJT-X, start with the **Pwr** slider at **50** (bottom right of the main window).
+3. Transmit a test tone (click **Tune** in WSJT-X, or double-click a decoded callsign to start a TX sequence).
+4. Watch the TX LED on the radio:
+   - **LED lights during TX and goes dark during RX** — levels are correct. Proceed.
+   - **LED stays on during RX** — audio level too high or Noise Gate too low. Lower the Pwr slider, or increase Noise Gate (menu 3.2).
+   - **LED does not light during TX** — audio level too low or Noise Gate too high. Raise the Pwr slider, or lower Noise Gate (menu 3.2).
+   - **LED toggles rapidly** — audio level is too high and retriggering VOX. Lower the Pwr slider significantly and retry.
+5. Once the LED behaviour is stable, fine-tune Noise Gate to eliminate any false triggers from background noise during receive.
+
 ---
 
 ## Frequencies
@@ -155,6 +169,11 @@ IFTX: https://apps.apple.com/us/app/iftx/id6446093115
 **Radio transmits continuously and does not return to receive:**
 - The Noise Gate is too low — background noise is triggering VOX. Increase it (menu 3.2).
 - Lower the computer audio output level.
+
+**Radio toggles rapidly between TX and RX (PTT flicker):**
+- Your audio output level is too high — the transmitted signal is retriggering VOX before it fully drops. Lower the Pwr slider in WSJT-X (or equivalent level control in your software) significantly and retry.
+- Increase the Noise Gate (menu 3.2) to raise the trigger threshold.
+- Confirm the OS audio output volume for the USB device is at 100% and that you are controlling level via the software, not the OS mixer — the OS mixer can cause non-linear level behaviour.
 
 **Transmissions are not decoded by other stations:**
 - Check your computer clock is synchronised to within 1 second of UTC.
