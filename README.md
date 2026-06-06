@@ -75,52 +75,9 @@ Pebble HF has a built-in straight key and microphone. An external key or mic can
 
 ## Firmware
 
-The radio comes pre-programmed. At this stage, custom programming is not encouraged, but here is what is being used during development:
+The radio comes pre-programmed. If you need to update the firmware, see the dedicated programming guide:
 
-### Programming Hardware
-
-- **AVR Programmer**: [Pocket AVR Programmer](https://www.sparkfun.com/pocket-avr-programmer.html)
-- **Pogo Pins** (to program without soldering a header): [Spring Loaded Pogo Pins](https://www.amazon.com/dp/B075Q25BK3)
-
-### Programming Commands
-
-#### Using Pocket AVR Programmer (usbtiny)
-
-Program the firmware:
-```
-avrdude -c usbtiny -p m328p -U flash:w:usdx.ino.hex
-```
-
-Set the fuses:
-```
-avrdude -c usbtiny -p m328p \
-  -U lfuse:w:0xFF:m \
-  -U hfuse:w:0xD6:m \
-  -U efuse:w:0xFD:m
-```
-
-#### Using stk500v1-Compatible Programmer
-
-Replace `/dev/cu.usbserial-XXXX` with your actual serial port (e.g., `/dev/cu.usbserial-3120`).
-
-Program the firmware:
-```
-avrdude -c stk500v1 -p m328p -P /dev/cu.usbserial-XXXX -b 19200 -U flash:w:usdx.ino.hex
-```
-
-Set the fuses:
-```
-avrdude -c stk500v1 -p m328p -P /dev/cu.usbserial-XXXX -b 19200 \
-  -U lfuse:w:0xFF:m \
-  -U hfuse:w:0xD6:m \
-  -U efuse:w:0xFD:m
-```
-
-A utility script is also available for stk500v1 programmers that auto-detects the serial port, flashes firmware, programs fuses, and verifies:
-```
-python3 utils/flash_pebble.py
-```
-Run `python3 utils/flash_pebble.py --help` for options.
+> **For full firmware update instructions — including the easy web-based updater and the command-line (avrdude) method — see [PROGRAMMING.md](PROGRAMMING.md).**
 
 ## Changelog
 
