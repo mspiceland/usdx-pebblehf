@@ -63,6 +63,8 @@ Follow this sequence each time you set up — correct audio levels are the most 
    - **LED toggles rapidly** — audio level is too high and retriggering VOX. Lower the Pwr slider significantly and retry.
 5. Once the LED behaviour is stable, fine-tune Noise Gate to eliminate any false triggers from background noise during receive.
 
+> **Practice Mode:** Before going on air, use Practice Mode to verify your VOX setup without transmitting RF. Enable it in the radio menu — the display shows **P** whenever VOX would trigger TX. This lets you confirm the radio is keying at the right moments and for the right duration before you actually transmit.
+
 ---
 
 ## Frequencies
@@ -165,10 +167,12 @@ IFTX: https://apps.apple.com/us/app/iftx/id6446093115
 - Check that the audio output of your computer/phone is turned up.
 - Try lowering the Noise Gate (menu 3.2) — it may be set too high.
 - Confirm the correct USB Audio Device is selected in your software.
+- Confirm you are running firmware **v1.0.4 or later**. Earlier versions incorrectly treated the TRS ring conductor (used for external mic PTT) as a PTT signal from the audio cable, which could cause unintended behaviour with some sound cards. Update to the latest firmware before troubleshooting other issues.
 
 **Radio transmits continuously and does not return to receive:**
 - The Noise Gate is too low — background noise is triggering VOX. Increase it (menu 3.2).
 - Lower the computer audio output level.
+- If raising the Noise Gate does not help, RF feedback from the antenna may be re-triggering VOX during TX. Try routing the audio cable away from the antenna, or add a ferrite clamp over the audio cable close to the radio.
 
 **Radio toggles rapidly between TX and RX (PTT flicker):**
 - Your audio output level is too high — the transmitted signal is retriggering VOX before it fully drops. Lower the Pwr slider in WSJT-X (or equivalent level control in your software) significantly and retry.
