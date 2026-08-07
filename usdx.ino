@@ -4095,7 +4095,7 @@ void stepsize_change(int8_t val)
   stepsize += val;
   if(stepsize < STEP_1M) stepsize = STEP_10;
   if(stepsize > STEP_10) stepsize = STEP_1M;
-  if(stepsize == STEP_10k || stepsize == STEP_500k) stepsize += val;
+  if(stepsize == STEP_500k) stepsize += val;
   stepsize_showcursor();
 }
 
