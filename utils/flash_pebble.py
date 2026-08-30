@@ -9,10 +9,15 @@ independent fuse read-back verifications.
 
 Usage:
     python3 flash_pebble.py [hex_file] [--port /dev/cu.usbserial-XXXX]
+    python3 flash_pebble.py [hex_file] [--programmer usbasp]
 
 If hex_file is not specified, looks for usdx.ino.hex in the project root.
-If --port is not specified, all matching USB serial ports are programmed.
---port may be given multiple times to program a specific subset.
+
+Defaults to the original stk500v1 programmer, which connects over a serial
+port: if --port is not specified, all matching USB serial ports are
+programmed, and --port may be given multiple times to program a specific
+subset. Pass --programmer/-c to use a different avrdude programmer id (e.g.
+"usbasp"), which talks over USB directly and does not need a --port.
 
 Full avrdude output for each device is written to a per-device log file;
 the complete log of any failed device is printed at the end.
@@ -34,7 +39,12 @@ from datetime import datetime
 
 AVRDUDE_PROGRAMMER = "stk500v1"
 AVRDUDE_PART = "m328p"
-AVRDUDE_BAUD = "19200"
+AVRDUDE_BAUD = "19200"  # only used for serial-based programmers, e.g. stk500v1
+
+# avrdude programmer ids (-c values) that connect over a serial port and
+# therefore need -P <port> / -b <baud>. Anything else (e.g. usbasp) is
+# assumed to talk directly over USB and needs neither.
+SERIAL_PROGRAMMERS = {"stk500v1"}
 
 FUSE_LFUSE = "0xFF"
 FUSE_HFUSE = "0xD6"
@@ -146,7 +156,13 @@ def detect_serial_ports():
 
 
 def short_name(port):
-    """Short display name for a port: /dev/cu.usbserial-31210 -> usbserial-31210."""
+    """Short display name for a port: /dev/cu.usbserial-31210 -> usbserial-31210.
+
+    For portless programmers (e.g. usbasp), port is None and the programmer
+    id itself is used as the display name.
+    """
+    if port is None:
+        return AVRDUDE_PROGRAMMER
     name = os.path.basename(port)
     if name.startswith("cu."):
         name = name[3:]
@@ -186,9 +202,10 @@ def run_avrdude(port, extra_args, step_label, log):
         AVRDUDE_PATH,
         "-c", AVRDUDE_PROGRAMMER,
         "-p", AVRDUDE_PART,
-        "-P", port,
-        "-b", AVRDUDE_BAUD,
-    ] + extra_args
+    ]
+    if port is not None:
+        cmd += ["-P", port, "-b", AVRDUDE_BAUD]
+    cmd += extra_args
 
     log.write(f"\n$ {' '.join(cmd)}\n")
     log.flush()
@@ -399,7 +416,7 @@ def flash_device(state, hex_file, fuses_only, board_lock):
     state.start_time = time.time()
 
     with open(state.log_path, "w") as log:
-        log.write(f"Pebble HF flash log — {state.port}\n")
+        log.write(f"Pebble HF flash log — {state.port or state.name}\n")
         log.write(f"Started: {datetime.now().isoformat()}\n")
 
         # Build the step sequence (identical to the original 4 steps)
@@ -494,29 +511,156 @@ def run_status_board(states, threads, board_lock):
         t.join()
 
 
+def run_flash_round(args, hex_file, needs_port, round_num, loop_mode):
+    """Resolve programmer(s), flash them, print the summary, and return the
+    resulting DeviceState list — or None if the user aborted before flashing
+    (Ctrl+C at the confirmation prompt)."""
+
+    # ── Resolve programmer(s) ──
+    if needs_port:
+        if args.port:
+            ports = args.port
+        else:
+            print_info("Searching for USB serial ports...")
+            ports = detect_serial_ports()
+
+        if not ports:
+            print_error("No USB serial port found matching "
+                        + " or ".join(SERIAL_PORT_GLOBS))
+            print_info("Are the programmers plugged in?")
+            print_info("Check with: ls /dev/cu.* (macOS) or ls /dev/ttyUSB* (Linux)")
+            print_big_x("SETUP", "No serial port detected")
+            sys.exit(1)
+
+        print_success(f"Found {len(ports)} programmer(s):")
+        for port in ports:
+            print_info(f"  {port}")
+    else:
+        # Portless programmer (e.g. usbasp): talks directly over USB.
+        ports = [None]
+        print_success(f"Using '{AVRDUDE_PROGRAMMER}' programmer (no port required)")
+
+    # ── Set up per-device logs ──
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    run_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if loop_mode:
+        run_stamp = f"{run_stamp}-round{round_num:02d}"
+    log_dir = os.path.join(script_dir, "logs", run_stamp)
+    os.makedirs(log_dir, exist_ok=True)
+    print_info(f"Logs: {log_dir}/")
+
+    states = [
+        DeviceState(port, os.path.join(log_dir, f"{short_name(port)}.log"))
+        for port in ports
+    ]
+
+    # ── Confirm before flashing ──
+    if loop_mode:
+        prompt = (f"Ready to flash board #{round_num} ({len(ports)} device(s)). "
+                  f"Press ENTER to begin (Ctrl+C to stop looping)...")
+    else:
+        prompt = f"Ready to flash {len(ports)} device(s). Press ENTER to begin (Ctrl+C to abort)..."
+    print(f"\n{Colors.YELLOW}{Colors.BOLD}  {prompt}{Colors.RESET}", end="")
+    try:
+        input()
+    except (KeyboardInterrupt, EOFError):
+        print(f"\n\n  {Colors.DIM}{'Stopped.' if loop_mode else 'Aborted.'}{Colors.RESET}")
+        return None
+    print()
+
+    start_time = time.time()
+
+    # ── Flash all devices in parallel, one thread per programmer ──
+    board_lock = threading.Lock()
+    threads = []
+    for state in states:
+        t = threading.Thread(
+            target=flash_device,
+            args=(state, hex_file, args.fuses_only, board_lock),
+            name=f"flash-{state.name}",
+            daemon=True,
+        )
+        threads.append(t)
+        t.start()
+
+    run_status_board(states, threads, board_lock)
+
+    # ── Summary table ──
+    elapsed = time.time() - start_time
+    failed = [s for s in states if s.result is not True]
+
+    name_width = max(max(len(s.name) for s in states), len("Device"))
+    print(f"\n{Colors.BOLD}  Summary{Colors.RESET}")
+    print(f"{Colors.DIM}  {'─' * 50}{Colors.RESET}")
+    print(f"  {Colors.BOLD}{'Device'.ljust(name_width)}  {'Result'.ljust(6)}  "
+          f"{'Time'.rjust(7)}  Failed step{Colors.RESET}")
+    for s in states:
+        time_str = f"{s.elapsed:.1f}s" if s.elapsed is not None else "-"
+        if s.result is True:
+            print(f"  {s.name.ljust(name_width)}  "
+                  f"{Colors.GREEN}{'PASS'.ljust(6)}{Colors.RESET}  {time_str.rjust(7)}")
+        else:
+            print(f"  {s.name.ljust(name_width)}  "
+                  f"{Colors.RED}{'FAIL'.ljust(6)}{Colors.RESET}  {time_str.rjust(7)}  "
+                  f"{Colors.RED}{s.failed_step or 'DID NOT FINISH'}{Colors.RESET}")
+    print(f"{Colors.DIM}  {'─' * 50}{Colors.RESET}")
+    print(f"{Colors.DIM}  Total time: {elapsed:.1f}s{Colors.RESET}")
+
+    # ── Dump full logs for failed devices ──
+    for s in failed:
+        print(f"\n{Colors.RED}{Colors.BOLD}  ── avrdude log for FAILED device "
+              f"{s.name} ──{Colors.RESET}")
+        try:
+            with open(s.log_path) as f:
+                for line in f.read().strip().splitlines():
+                    print(f"  {Colors.DIM}│{Colors.RESET} {line}")
+        except OSError as e:
+            print_error(f"Could not read log {s.log_path}: {e}")
+
+    return states
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     global AVRDUDE_PATH
+    global AVRDUDE_PROGRAMMER
 
     parser = argparse.ArgumentParser(
         description="Pebble HF Board Flashing Utility",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python3 flash_pebble.py                          # auto-detect and flash ALL programmers
+    python3 flash_pebble.py                          # auto-detect and flash ALL serial programmers
+    python3 flash_pebble.py --loop                    # flash one board, then prompt for the next
     python3 flash_pebble.py firmware.hex              # specify hex file
-    python3 flash_pebble.py --port /dev/cu.usbserial-3120   # flash only this one
-    python3 flash_pebble.py -p /dev/ttyUSB0 -p /dev/ttyUSB1 # flash a specific subset
     python3 flash_pebble.py --fuses-only              # skip flash, only program fuses
+    python3 flash_pebble.py --port /dev/cu.usbserial-3120         # flash only this one
+    python3 flash_pebble.py -p /dev/ttyUSB0 -p /dev/ttyUSB1       # flash a specific subset
+    python3 flash_pebble.py --programmer usbasp                    # flash via usbasp (no port needed)
         """,
     )
     parser.add_argument("hex_file", nargs="?", default=None, help="Path to .hex firmware file")
+    parser.add_argument("--programmer", "-c", default=AVRDUDE_PROGRAMMER,
+                        help=f"avrdude programmer id, i.e. its -c value (default: {AVRDUDE_PROGRAMMER}). "
+                             f"Use 'usbasp' for a USB-direct programmer that needs no --port.")
     parser.add_argument("--port", "-p", action="append", default=None,
-                        help="Serial port (repeatable; all ports auto-detected if omitted)")
+                        help="Serial port (repeatable; all ports auto-detected if omitted). "
+                             "Only used with a serial-based --programmer such as stk500v1.")
     parser.add_argument("--fuses-only", action="store_true",
                         help="Skip flash, only program and verify fuses")
+    parser.add_argument("--loop", action="store_true",
+                        help="After flashing, prompt to swap in the next board and repeat "
+                             "(Ctrl+C to stop). Handy with usbasp, which has no port to auto-detect.")
     args = parser.parse_args()
+
+    AVRDUDE_PROGRAMMER = args.programmer
+    needs_port = AVRDUDE_PROGRAMMER in SERIAL_PROGRAMMERS
+
+    if args.port and not needs_port:
+        print(f"error: --port is not used with the '{AVRDUDE_PROGRAMMER}' programmer "
+              f"(it does not need a port)", file=sys.stderr)
+        sys.exit(2)
 
     print_banner()
 
@@ -560,98 +704,35 @@ Examples:
         file_size = os.path.getsize(hex_file)
         print_success(f"Hex file: {hex_file} ({file_size:,} bytes)")
 
-    # ── Detect serial ports ──
-    if args.port:
-        ports = args.port
-    else:
-        print_info("Searching for USB serial ports...")
-        ports = detect_serial_ports()
+    if args.loop:
+        print_info("Loop mode: flash a board, then press ENTER to flash the next one.")
+        round_num = 0
+        total_pass = 0
+        total_fail = 0
+        completed_rounds = 0
+        while True:
+            round_num += 1
+            states = run_flash_round(args, hex_file, needs_port, round_num, loop_mode=True)
+            if states is None:
+                break
+            completed_rounds += 1
+            total_pass += sum(1 for s in states if s.result is True)
+            total_fail += sum(1 for s in states if s.result is not True)
 
-    if not ports:
-        print_error("No USB serial port found matching "
-                    + " or ".join(SERIAL_PORT_GLOBS))
-        print_info("Are the programmers plugged in?")
-        print_info("Check with: ls /dev/cu.* (macOS) or ls /dev/ttyUSB* (Linux)")
-        print_big_x("SETUP", "No serial port detected")
-        sys.exit(1)
-
-    print_success(f"Found {len(ports)} programmer(s):")
-    for port in ports:
-        print_info(f"  {port}")
-
-    # ── Set up per-device logs ──
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    run_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_dir = os.path.join(script_dir, "logs", run_stamp)
-    os.makedirs(log_dir, exist_ok=True)
-    print_info(f"Logs: {log_dir}/")
-
-    states = [
-        DeviceState(port, os.path.join(log_dir, f"{short_name(port)}.log"))
-        for port in ports
-    ]
-
-    # ── Confirm before flashing ──
-    print(f"\n{Colors.YELLOW}{Colors.BOLD}  Ready to flash {len(ports)} device(s). "
-          f"Press ENTER to begin (Ctrl+C to abort)...{Colors.RESET}", end="")
-    try:
-        input()
-    except KeyboardInterrupt:
-        print(f"\n\n  {Colors.DIM}Aborted.{Colors.RESET}")
-        sys.exit(0)
-    print()
-
-    start_time = time.time()
-
-    # ── Flash all devices in parallel, one thread per programmer ──
-    board_lock = threading.Lock()
-    threads = []
-    for state in states:
-        t = threading.Thread(
-            target=flash_device,
-            args=(state, hex_file, args.fuses_only, board_lock),
-            name=f"flash-{state.name}",
-            daemon=True,
-        )
-        threads.append(t)
-        t.start()
-
-    run_status_board(states, threads, board_lock)
-
-    # ── Summary table ──
-    elapsed = time.time() - start_time
-    passed = [s for s in states if s.result is True]
-    failed = [s for s in states if s.result is not True]
-
-    name_width = max(max(len(s.name) for s in states), len("Device"))
-    print(f"\n{Colors.BOLD}  Summary{Colors.RESET}")
-    print(f"{Colors.DIM}  {'─' * 50}{Colors.RESET}")
-    print(f"  {Colors.BOLD}{'Device'.ljust(name_width)}  {'Result'.ljust(6)}  "
-          f"{'Time'.rjust(7)}  Failed step{Colors.RESET}")
-    for s in states:
-        time_str = f"{s.elapsed:.1f}s" if s.elapsed is not None else "-"
-        if s.result is True:
-            print(f"  {s.name.ljust(name_width)}  "
-                  f"{Colors.GREEN}{'PASS'.ljust(6)}{Colors.RESET}  {time_str.rjust(7)}")
+        print(f"\n{Colors.BOLD}  Loop finished: {completed_rounds} round(s), "
+              f"{total_pass} device(s) passed, {total_fail} failed{Colors.RESET}")
+        if total_fail:
+            print_big_x(f"{total_fail} DEVICE(S) FAILED OVER {completed_rounds} ROUND(S)")
+            sys.exit(1)
         else:
-            print(f"  {s.name.ljust(name_width)}  "
-                  f"{Colors.RED}{'FAIL'.ljust(6)}{Colors.RESET}  {time_str.rjust(7)}  "
-                  f"{Colors.RED}{s.failed_step or 'DID NOT FINISH'}{Colors.RESET}")
-    print(f"{Colors.DIM}  {'─' * 50}{Colors.RESET}")
-    print(f"{Colors.DIM}  Total time: {elapsed:.1f}s{Colors.RESET}")
+            print_big_checkmark(f"{total_pass} DEVICE(S) PASSED OVER {completed_rounds} ROUND(S)")
+            sys.exit(0)
 
-    # ── Dump full logs for failed devices ──
-    for s in failed:
-        print(f"\n{Colors.RED}{Colors.BOLD}  ── avrdude log for FAILED device "
-              f"{s.name} ──{Colors.RESET}")
-        try:
-            with open(s.log_path) as f:
-                for line in f.read().strip().splitlines():
-                    print(f"  {Colors.DIM}│{Colors.RESET} {line}")
-        except OSError as e:
-            print_error(f"Could not read log {s.log_path}: {e}")
+    states = run_flash_round(args, hex_file, needs_port, round_num=1, loop_mode=False)
+    if states is None:
+        sys.exit(0)
 
-    # ── Final result ──
+    failed = [s for s in states if s.result is not True]
     if failed:
         names = ", ".join(s.name for s in failed)
         print_big_x(f"{len(failed)} OF {len(states)} DEVICE(S)", f"Failed: {names}")
