@@ -79,10 +79,15 @@ The radio comes pre-programmed. If you need to update the firmware, see the dedi
 
 > **For full firmware update instructions — including the easy web-based updater and the command-line (avrdude) method — see [PROGRAMMING.md](PROGRAMMING.md).**
 
+## Building for other bands
+
+The firmware defaults to 20m. For a board built with a different band filter, enable exactly one of the `BAND_40M`, `BAND_30M`, `BAND_17M`, `BAND_15M`, `BAND_12M` or `BAND_10M` lines near the top of `usdx.ino` (or pass e.g. `-DBAND_40M` to the compiler) and rebuild. This sets the tuning limits, the power-on frequency and the default sideband for that band. Everything else in the firmware is unchanged.
+
 ## Changelog
 
 | Version | Changes |
 |---------|---------|
+| **1.0.8** | Compile-time band selection (`BAND_40M` … `BAND_10M` in `usdx.ino`) for 40m through 10m board variants; 20m remains the default |
 | **1.0.7** | Fix critical CW RX bug from 1.0.3 — wanted signal was placed on the rejected-image side, making strong signals weak/inaudible while a loud image appeared ~1.2 kHz above. Reverted CW RX/TX oscillator config to the proven original; configurable CW tone retained |
 | **1.0.6** | Fix audible "thump" between CW dits/dahs caused by sudden RX audio onset — RX audio now fades in briefly after each CW TX→RX transition (no change to RF envelope or sidetone) |
 | **1.0.5** | Noise Gate setting now only applies in VOX mode; voice PTT uses optimal low threshold automatically |

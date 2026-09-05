@@ -4,7 +4,7 @@
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define VERSION   "1.0.7"
+#define VERSION   "1.0.8"
 #define VERSION_DATE __DATE__  // Compile date for version display
 #define EEPROM_VERSION_ID 1  // Increment when EEPROM layout changes (decoupled from VERSION string)
 
@@ -16,6 +16,15 @@
 //#define F_XTAL  25004000   // 25MHz SI5351 crystal  (enable for WB2CBA-uSDX, SI5351 break-out board or uSDXDuO)
 //#define F_XTAL  25000000   // 25MHz SI5351 crystal  (enable for 25MHz TCXO)
 #define F_XTAL    26000000   // 26MHz SI5351 crystal (enable for WB2CBA-PebbleHF)
+// Single-band selection: enable at most one BAND_xx line below to match the LPF/BPF fitted on the board. When none is enabled the firmware
+// defaults to 20m. Each band sets the tuning limits, the power-on frequency and the default SSB sideband (see the BAND_xx table further down).
+//#define BAND_40M       1   // 40m:  7.000 -  7.300 MHz
+//#define BAND_30M       1   // 30m: 10.100 - 10.150 MHz
+//#define BAND_20M       1   // 20m: 14.000 - 14.350 MHz (default)
+//#define BAND_17M       1   // 17m: 18.068 - 18.168 MHz
+//#define BAND_15M       1   // 15m: 21.000 - 21.450 MHz
+//#define BAND_12M       1   // 12m: 24.890 - 24.990 MHz
+//#define BAND_10M       1   // 10m: 28.000 - 29.700 MHz
 #define SWAP_ROTARY    1   // Swap rotary direction (enable for WB2CBA-uSDX)
 //#define QCX            1   // Supports older (non-SDR) QCX HW modifications (QCX, QCX-SSB, QCX-DSP with I/Q alignment-feature)
 //#define OLED_SSD1306   1   // OLED display (SSD1306 128x32 or 128x64), connect SDA (PD2), SCL (PD3)
@@ -61,6 +70,58 @@
 //#define F_XTAL  20000000   // Enable this for uSDXDuO, 20MHz SI5351 crystal
 //#define TX_CLK0_CLK1   1   // Enable this for uSDXDuO, i.e. when PA is driven by CLK0, CLK1 (not CLK2); NTX pin may be used for enabling the TX path (this is like RX pin, except that RX may also be used as attenuator)
 //#define F_CLK2  12000000   // Enables a fixed CLK2 clock output of choice (only applicable when TX_CLK0_CLK1 is enabled), e.g. for up-converter or to clock UART USB device
+
+// Single-band table, derived from the BAND_xx selection above (or pass e.g. -DBAND_40M to the compiler).
+// BAND_INDEX      index into band[]/band_label[] (160m=0, 80m=1, 60m=2, 40m=3, 30m=4, 20m=5, 17m=6, 15m=7, 12m=8, 10m=9, 6m=10)
+// FREQ_LIMIT_*    tuning is clamped to these edges (widest ITU allocation; observe your own license/region limits)
+// FREQ_DEFAULT    power-on frequency on first boot or when the saved frequency is outside the band (popular CW spot)
+// MODE_DEFAULT    default SSB sideband: LSB below 10 MHz, USB above (digital modes such as FT8 use USB on all bands)
+#if defined(BAND_40M) + defined(BAND_30M) + defined(BAND_20M) + defined(BAND_17M) + defined(BAND_15M) + defined(BAND_12M) + defined(BAND_10M) > 1
+#error "Enable only one BAND_xx option"
+#endif
+#if defined(BAND_40M)
+#define BAND_INDEX       3
+#define FREQ_LIMIT_LOW   7000000UL
+#define FREQ_LIMIT_HIGH  7300000UL
+#define FREQ_DEFAULT     7030000UL
+#define MODE_DEFAULT     LSB
+#elif defined(BAND_30M)
+#define BAND_INDEX       4
+#define FREQ_LIMIT_LOW   10100000UL
+#define FREQ_LIMIT_HIGH  10150000UL
+#define FREQ_DEFAULT     10116000UL
+#define MODE_DEFAULT     USB
+#elif defined(BAND_17M)
+#define BAND_INDEX       6
+#define FREQ_LIMIT_LOW   18068000UL
+#define FREQ_LIMIT_HIGH  18168000UL
+#define FREQ_DEFAULT     18086000UL
+#define MODE_DEFAULT     USB
+#elif defined(BAND_15M)
+#define BAND_INDEX       7
+#define FREQ_LIMIT_LOW   21000000UL
+#define FREQ_LIMIT_HIGH  21450000UL
+#define FREQ_DEFAULT     21030000UL
+#define MODE_DEFAULT     USB
+#elif defined(BAND_12M)
+#define BAND_INDEX       8
+#define FREQ_LIMIT_LOW   24890000UL
+#define FREQ_LIMIT_HIGH  24990000UL
+#define FREQ_DEFAULT     24906000UL
+#define MODE_DEFAULT     USB
+#elif defined(BAND_10M)
+#define BAND_INDEX       9
+#define FREQ_LIMIT_LOW   28000000UL
+#define FREQ_LIMIT_HIGH  29700000UL
+#define FREQ_DEFAULT     28030000UL
+#define MODE_DEFAULT     USB
+#else  // BAND_20M (default)
+#define BAND_INDEX       5
+#define FREQ_LIMIT_LOW   14000000UL
+#define FREQ_LIMIT_HIGH  14350000UL
+#define FREQ_DEFAULT     14030000UL
+#define MODE_DEFAULT     USB
+#endif
 
 // QCX pin defintions
 #define LCD_D4  0         //PD0    (pin 2)
@@ -3764,9 +3825,9 @@ uint16_t analogSampleMic()
 }
 
 volatile bool change = true;
-volatile int32_t freq = 14000000;
-static int32_t vfo[] = { 14030000, 14030000 };
-static uint8_t vfomode[] = { USB, USB };
+volatile int32_t freq = FREQ_DEFAULT;
+static int32_t vfo[] = { FREQ_DEFAULT, FREQ_DEFAULT };
+static uint8_t vfomode[] = { MODE_DEFAULT, MODE_DEFAULT };
 enum vfo_t { VFOA=0, VFOB=1, SPLIT=2 };
 volatile uint8_t vfosel = VFOA;
 volatile int16_t rit = 0;
@@ -4047,13 +4108,9 @@ void calibrate_iq()
 #endif
 #endif //QCX
 
-uint8_t prev_bandval = 5;  // 5 = 20m band (single-band board)
-uint8_t bandval = 5;       // 5 = 20m band (single-band board)
+uint8_t prev_bandval = BAND_INDEX;  // single-band board, see BAND_xx selection
+uint8_t bandval = BAND_INDEX;
 #define N_BANDS 11
-
-// Band frequency limits for single-band board (change these for other band variants)
-#define FREQ_LIMIT_LOW   14000000UL  // 20m band lower limit (14.000 MHz)
-#define FREQ_LIMIT_HIGH  14350000UL  // 20m band upper limit (14.350 MHz)
 
 #ifdef CW_FREQS_QRP
 uint32_t band[N_BANDS] = { /*472000,*/ 1810000, 3560000, 5351500, 7030000, 10106000, 14060000, 18096000, 21060000, 24906000, 28060000, 50096000/*, 70160000, 144060000*/ };  // CW QRP freqs
@@ -4154,7 +4211,7 @@ void show_banner(){
   const char* cap_label[] = { "SSB", "DSP", "SDR" };
   if(ssb_cap || dsp_cap){ lcd.print('-'); lcd.print(cap_label[dsp_cap]); }
 #else
-  lcd.print(F("PEBBLE"));  // Pocket 20m single-band variant
+  lcd.print(F("PEBBLE"));  // Pebble HF single-band variant
 #endif //QCX
   lcd.print('\x01'); lcd_blanks(); lcd_blanks();
 }
@@ -4367,7 +4424,7 @@ int8_t paramAction(uint8_t action, uint8_t id = ALL)  // list of parameters
     case VOLUME:  paramAction(action, volume, 0x11, F("Volume"), NULL, -1, 16, false); break;
     case MODE:    paramAction(action, mode, 0x12, F("Mode"), mode_label, 0, _N(mode_label) - 1, false); break;
     case FILTER:  paramAction(action, filt, 0x13, F("Filter BW"), filt_label, 0, _N(filt_label) - 1, false); break;
-    //case BAND:    paramAction(action, bandval, 0x14, F("Band"), band_label, 0, _N(band_label) - 1, false); break;  // Disabled for single-band 20m board
+    //case BAND:    paramAction(action, bandval, 0x14, F("Band"), band_label, 0, _N(band_label) - 1, false); break;  // Disabled for single-band board
     case STEP:    paramAction(action, stepsize, 0x15, F("Tune Rate"), stepsize_label, 0, _N(stepsize_label) - 1, false); break;
     case VFOSEL:  paramAction(action, vfosel, 0x16, F("VFO Mode"), vfosel_label, 0, _N(vfosel_label) - 1, false); break;
 #ifdef RIT_ENABLE
@@ -5212,12 +5269,12 @@ void setup()
     paramAction(LOAD);  // load all parameters
   }
   
-  // Force 20m band for single-band board
-  bandval = 5;
-  prev_bandval = 5;
-  // Only override VFO frequencies if they're outside 20m band limits (preserve saved frequencies)
-  if(vfo[0] < FREQ_LIMIT_LOW || vfo[0] > FREQ_LIMIT_HIGH) vfo[0] = 14030000UL;  // Default to 14.030 MHz
-  if(vfo[1] < FREQ_LIMIT_LOW || vfo[1] > FREQ_LIMIT_HIGH) vfo[1] = 14030000UL;  // Default to 14.030 MHz
+  // Force the selected band for single-band board
+  bandval = BAND_INDEX;
+  prev_bandval = BAND_INDEX;
+  // Only override VFO frequencies if they're outside the band limits (preserve saved frequencies)
+  if(vfo[0] < FREQ_LIMIT_LOW || vfo[0] > FREQ_LIMIT_HIGH) vfo[0] = FREQ_DEFAULT;
+  if(vfo[1] < FREQ_LIMIT_LOW || vfo[1] > FREQ_LIMIT_HIGH) vfo[1] = FREQ_DEFAULT;
   
   //if(abs((int32_t)F_XTAL - (int32_t)si5351.fxtal) > 50000){ si5351.fxtal = F_XTAL; }  // if F_XTAL frequency deviates too much with actual setting -> use default
   cw_offset = cw_tone;  // recalculate cw_offset from loaded cw_tone
@@ -5597,7 +5654,7 @@ void loop()
         }
         break;
       case BE|DC:
-        // Band switching disabled for single-band 20m board
+        // Band switching disabled for single-band board
         //bandval++;
         //if(bandval >= (N_BANDS-1)) bandval = 1;  // excludes 6m, 160m
         //stepsize = STEP_1k;
