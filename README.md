@@ -73,6 +73,8 @@ Pebble HF has a built-in straight key and microphone. An external key or mic can
 
 > **For the full operating manual including all menu options, see [OPERATING_MANUAL.md](OPERATING_MANUAL.md).**
 
+> **For a general reference to every external connector — antenna, power, key/mic, audio — see [WIRING.md](WIRING.md).**
+
 ## Firmware
 
 The radio comes pre-programmed. If you need to update the firmware, see the dedicated programming guide:
