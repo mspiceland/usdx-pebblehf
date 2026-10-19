@@ -1,0 +1,47 @@
+name: Build Operating Manual PDF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - OPERATING_MANUAL.md
+      - .github/manual-pdf.css
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: operating-manual-pdf
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # md-to-pdf depends on puppeteer >=8, so pin puppeteer too for repeatable builds
+      - name: Build PDF
+        run: |
+          npx --yes -p md-to-pdf@5.2.4 -p puppeteer@25.12.0 md-to-pdf OPERATING_MANUAL.md \
+            --stylesheet .github/manual-pdf.css \
+            --pdf-options '{"format": "Letter", "margin": {"top": "18mm", "bottom": "18mm", "left": "16mm", "right": "16mm"}, "printBackground": true}' \
+            --launch-options '{"args": ["--no-sandbox"]}'
+
+      - name: Commit PDF if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add OPERATING_MANUAL.pdf
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update Operating Manual PDF"
+            git pull --rebase
+            git push
+          fi

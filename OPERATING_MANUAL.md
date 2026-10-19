@@ -4,6 +4,20 @@
 
 ![Pebble HF](https://pebblehf.com/images/Pebble%20HF.jpg)
 
+This manual is available [online](https://github.com/mspiceland/usdx-pebblehf/blob/main/OPERATING_MANUAL.md) and as a [PDF](https://github.com/mspiceland/usdx-pebblehf/blob/main/OPERATING_MANUAL.pdf).
+
+## Contents
+
+- [Introduction](#introduction)
+- [Controls](#controls)
+- [Basic Operation](#basic-operation)
+- [Menu System](#menu-system)
+- [Menu Reference — Summary](#menu-reference--summary)
+- [Menu Reference — Detailed](#menu-reference--detailed)
+- [Button Quick Reference](#button-quick-reference)
+- [Startup Self-Test](#startup-self-test)
+- [Credits](#credits)
+
 ## Introduction
 
 Pebble HF is an ultra-affordable, ultra-portable QRP transceiver for the 20-meter band (14.000–14.350 MHz). It supports CW (morse code), SSB voice (USB/LSB), and digital modes such as FT8, JS8, and FT4. Based on the open source uSDX software-defined radio design, Pebble HF packs a full-featured SDR transceiver into a tiny, power-efficient package.
