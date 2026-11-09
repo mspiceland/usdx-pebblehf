@@ -1,5 +1,9 @@
 # Pebble HF: An Ultra-Affordable HF Radio for Everyone
 
+![Firmware version](https://img.shields.io/badge/firmware-1.0.7-blue)
+![Licence](https://img.shields.io/github/license/mspiceland/usdx-pebblehf)
+![Last commit](https://img.shields.io/github/last-commit/mspiceland/usdx-pebblehf)
+![Latest release](https://img.shields.io/github/v/release/mspiceland/usdx-pebblehf)
 
 Pebble HF is an experimental QRP radio designed to get more people into HF radio with a General class amateur radio license and outdoor radio operation. It is an ultra-inexpensive 20-meter single-band transceiver built for accessibility and simplicity.
 
