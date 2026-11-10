@@ -4,7 +4,7 @@
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define VERSION   "1.0.7"
+#define VERSION   "1.0.7g"
 #define VERSION_DATE __DATE__  // Compile date for version display
 #define EEPROM_VERSION_ID 1  // Increment when EEPROM layout changes (decoupled from VERSION string)
 
@@ -1157,31 +1157,54 @@ Display<LCD> lcd;     // highly-optimized LCD driver, OK for QCX supplied displa
 #endif
 
 volatile int8_t encoder_val = 0;
-volatile int8_t encoder_step = 0;
-static uint8_t last_state;
+static uint8_t last_state;      // last sampled encoder state: (B << 1) | A
+static int8_t enc_quarter = 0;  // quarter-steps (single A/B transitions) moved since the encoder was last in a detent
+#define ENCODER_DETENT_STATE  3   // A/B state at a mechanical detent: 3 = both contacts open (PEC11R and most encoders), 0 = both closed
+
+// ROT_A/ROT_B must be on PORTD (Arduino pins 0..7) since the ISR samples PIND directly
+#if (ROT_A > 7) || (ROT_B > 7)
+#error "ROT_A and ROT_B must be on PORTD (Arduino pins 0..7)"
+#endif
+static inline uint8_t encoder_read(){
+  uint8_t pins = PIND;  // sample A and B at the same instant (two digitalRead() calls are ~µs apart and can catch a bouncing contact mid-way)
+  return (((pins >> ROT_B) & 1) << 1) | ((pins >> ROT_A) & 1);
+}
+
+// Rotary encoder decoding (PEC11R-4215F-S24: 24 pulses / 24 detents, i.e. a full A/B quadrature cycle per detent).
+// Each detent produces 4 single-bit transitions: 3 -> 1 -> 0 -> 2 -> 3 (one direction), 3 -> 2 -> 0 -> 1 -> 3 (other direction).
+// Every valid transition adds +/-1 quarter-step; impossible transitions (both bits changed, i.e. a missed state) are ignored.
+// Steps are only emitted when the encoder arrives in the detent state, rounded to whole detents (4 quarter-steps each, so a
+// detent with one missed state still counts), and the quarter-step count is then reset. Contact bounce or shaft wobble around
+// a detent goes back and forth over one transition and nets to zero, and both directions register on arrival in the detent.
+// Because the count re-syncs at every detent, a glitch (e.g. A/B settling at power-up, or a missed state) only affects one detent.
 ISR(PCINT2_vect){  // Interrupt on rotary encoder turn
-  //noInterrupts();
-  //PCMSK2 &= ~((1 << PCINT22) | (1 << PCINT23));  // mask ROT_A, ROT_B interrupts
-  switch(last_state = (last_state << 4) | (_digitalRead(ROT_B) << 1) | _digitalRead(ROT_A)){ //transition  (see: https://www.allaboutcircuits.com/projects/how-to-use-a-rotary-encoder-in-a-mcu-based-project/  )
-//#define ENCODER_ENHANCED_RESOLUTION  1
+  uint8_t cur = encoder_read();
 #ifdef ENCODER_ENHANCED_RESOLUTION // Option: enhance encoder from 24 to 96 steps/revolution, see: appendix 1, https://www.sdr-kits.net/documents/PA0KLT_Manual.pdf
+  switch((last_state << 4) | cur){
     case 0x31: case 0x10: case 0x02: case 0x23: encoder_val++; break;
     case 0x32: case 0x20: case 0x01: case 0x13: encoder_val--; break;
-#else
-//    case 0x31: case 0x10: case 0x02: case 0x23: if(encoder_step < 0) encoder_step = 0; encoder_step++; if(encoder_step >  3){ encoder_step = 0; encoder_val++; } break;  // encoder processing for additional immunity to weared-out rotary encoders
-//    case 0x32: case 0x20: case 0x01: case 0x13: if(encoder_step > 0) encoder_step = 0; encoder_step--; if(encoder_step < -3){ encoder_step = 0; encoder_val--; } break;
-    case 0x23:  encoder_val++; break;
-    case 0x32:  encoder_val--; break;
-#endif
   }
-  //PCMSK2 |= (1 << PCINT22) | (1 << PCINT23);  // allow ROT_A, ROT_B interrupts
-  //interrupts();
+#else
+  switch((last_state << 2) | cur){  // (previous state << 2) | current state
+    case 0xD: case 0x4: case 0x2: case 0xB: if(enc_quarter <  100) enc_quarter++; break;  // 3->1, 1->0, 0->2, 2->3
+    case 0xE: case 0x8: case 0x1: case 0x7: if(enc_quarter > -100) enc_quarter--; break;  // 3->2, 2->0, 0->1, 1->3
+    default: break;  // no change, or invalid double transition (missed state): ignore
+  }
+  if(cur == ENCODER_DETENT_STATE){  // arrived in a detent: emit whole detents moved, then re-sync
+    if(enc_quarter >= 2) encoder_val += (enc_quarter + 2) >> 2;
+    else if(enc_quarter <= -2) encoder_val -= (2 - enc_quarter) >> 2;
+    enc_quarter = 0;
+  }
+#endif
+  last_state = cur;
 }
 void encoder_setup()
 {
   pinMode(ROT_A, INPUT_PULLUP);
   pinMode(ROT_B, INPUT_PULLUP);
-  last_state = (_digitalRead(ROT_B) << 1) | _digitalRead(ROT_A);  // init BEFORE enabling interrupt
+  delayMicroseconds(100);  // let pull-ups settle
+  last_state = encoder_read();  // init BEFORE enabling interrupt
+  enc_quarter = 0;
   encoder_val = 0;  // clear any spurious encoder values from power-up
   PCMSK2 |= (1 << PCINT22) | (1 << PCINT23); // interrupt-enable for ROT_A, ROT_B pin changes; see https://github.com/EnviroDIY/Arduino-SDI-12/wiki/2b.-Overview-of-Interrupts
   PCICR |= (1 << PCIE2); 
@@ -5813,8 +5836,11 @@ void loop()
 
   if(menumode == 0){
     if(encoder_val){  // process encoder tuning steps
-      process_encoder_tuning_step(encoder_val);
+      uint8_t sreg = SREG; cli();  // atomically take and clear, so a step arriving from the ISR in between is not lost
+      int8_t steps = encoder_val;
       encoder_val = 0;
+      SREG = sreg;
+      process_encoder_tuning_step(steps);
     }
   }
 
